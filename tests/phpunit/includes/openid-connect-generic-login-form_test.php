@@ -348,15 +348,16 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Test that roles beyond Subscriber and Customer are blocked, using the button text.
+	 * Test that roles not allowed a password are blocked, using the button text.
 	 *
 	 * @group LoginFormTests
 	 */
 	public function test_password_login_blocked_for_roles() {
 		$login_form = $this->create_login_form(
 			array(
-				'password_login'    => 'roles',
-				'login_button_text' => 'Log in with SSO',
+				'password_login'       => 'roles',
+				'password_login_roles' => array( 'subscriber', 'customer' ),
+				'login_button_text'    => 'Log in with SSO',
 			)
 		);
 		$editor     = self::factory()->user->create_and_get( array( 'role' => 'editor' ) );
@@ -391,7 +392,12 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 * @group LoginFormTests
 	 */
 	public function test_password_login_passes_through_errors_and_application_passwords() {
-		$login_form = $this->create_login_form( array( 'password_login' => 'roles' ) );
+		$login_form = $this->create_login_form(
+			array(
+				'password_login'       => 'roles',
+				'password_login_roles' => array( 'subscriber' ),
+			)
+		);
 		$error      = new WP_Error( 'incorrect_password', 'Wrong password.' );
 		$admin      = self::factory()->user->create_and_get( array( 'role' => 'administrator' ) );
 
@@ -400,6 +406,31 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 
 		do_action( 'application_password_did_authenticate', $admin, array() );
 		$this->assertSame( $admin, $login_form->block_password_login( $admin ) );
+	}
+
+	/**
+	 * Test that ticking a role allows it to use a password, and no ticked roles blocks everyone.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_password_login_allowed_roles_are_configurable() {
+		$editor = self::factory()->user->create_and_get( array( 'role' => 'editor' ) );
+
+		$allow_editors = $this->create_login_form(
+			array(
+				'password_login'       => 'roles',
+				'password_login_roles' => array( 'subscriber', 'editor' ),
+			)
+		);
+		$this->assertSame( $editor, $allow_editors->block_password_login( $editor ) );
+
+		$allow_none = $this->create_login_form(
+			array(
+				'password_login'       => 'roles',
+				'password_login_roles' => array(),
+			)
+		);
+		$this->assertWPError( $allow_none->block_password_login( $editor ) );
 	}
 
 }

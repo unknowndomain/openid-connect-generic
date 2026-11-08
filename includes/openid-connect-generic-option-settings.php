@@ -55,6 +55,7 @@
  *
  * @property bool $enforce_privacy          The flag to indicates whether a user us required to be authenticated to access the site.
  * @property string $password_login         Which users must log in with OpenID Connect instead of a password.
+ * @property array  $password_login_roles   The roles still allowed to log in with a password.
  * @property bool $alternate_redirect_uri   The flag to indicate whether to use the alternative redirect URI.
  * @property bool $token_refresh_enable     The flag whether to support refresh tokens by IDPs.
  * @property bool $link_existing_users      The flag to indicate whether to link to existing WordPress-only accounts or greturn an error.
