@@ -154,6 +154,7 @@ class OpenID_Connect_Generic_Login_Form {
 		$atts = shortcode_atts(
 			array(
 				'button_text' => $default_button_text,
+				'button_icon' => $this->settings->login_button_icon ?? '',
 				'endpoint_login' => $this->settings->endpoint_login,
 				'scope' => $this->settings->scope,
 				'client_id' => $this->settings->client_id,
@@ -167,6 +168,14 @@ class OpenID_Connect_Generic_Login_Form {
 
 		$text = apply_filters( 'openid-connect-generic-login-button-text', $atts['button_text'] );
 		$text = esc_html( $text );
+
+		$icon = '';
+		if ( ! empty( $atts['button_icon'] ) ) {
+			$icon = sprintf(
+				'<img src="%s" alt="" style="height: 1.2em; width: auto; vertical-align: middle; margin-right: 0.5em;">',
+				esc_url( $atts['button_icon'] )
+			);
+		}
 
 		$href = $this->client_wrapper->get_authentication_url(
 			array(
@@ -182,7 +191,7 @@ class OpenID_Connect_Generic_Login_Form {
 
 		$login_button = <<<HTML
 <div class="openid-connect-login-button" style="margin: 1em 0; text-align: center;">
-	<a class="button button-large" href="{$href}">{$text}</a>
+	<a class="button button-large" href="{$href}">{$icon}{$text}</a>
 </div>
 HTML;
 
