@@ -323,13 +323,9 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 * @group LoginFormTests
 	 */
 	public function test_button_icon_from_settings_renders_in_output() {
-		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
-		$settings->endpoint_login = 'https://idp.example.com/authorize';
-		$settings->scope = 'openid';
-		$settings->client_id = 'test-client';
-		$settings->acr_values = '';
-		$settings->login_type = 'button';
-		$settings->login_button_icon = 'https://site.example.com/icon.svg';
+		$settings = $this->create_settings_stub( array(
+			'login_button_icon' => 'https://site.example.com/icon.svg',
+		) );
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -358,12 +354,7 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 * @group LoginFormTests
 	 */
 	public function test_no_button_icon_by_default() {
-		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
-		$settings->endpoint_login = 'https://idp.example.com/authorize';
-		$settings->scope = 'openid';
-		$settings->client_id = 'test-client';
-		$settings->acr_values = '';
-		$settings->login_type = 'button';
+		$settings = $this->create_settings_stub();
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -389,13 +380,9 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 * @group LoginFormTests
 	 */
 	public function test_button_icon_url_escaping() {
-		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
-		$settings->endpoint_login = 'https://idp.example.com/authorize';
-		$settings->scope = 'openid';
-		$settings->client_id = 'test-client';
-		$settings->acr_values = '';
-		$settings->login_type = 'button';
-		$settings->login_button_icon = 'https://site.example.com/x.svg");}body{display:none';
+		$settings = $this->create_settings_stub( array(
+			'login_button_icon' => 'https://site.example.com/x.svg");}body{display:none',
+		) );
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
