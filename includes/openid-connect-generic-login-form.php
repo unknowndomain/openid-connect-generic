@@ -71,6 +71,11 @@ class OpenID_Connect_Generic_Login_Form {
 		// Add a shortcode for the login button.
 		add_shortcode( 'openid_connect_generic_login_button', array( $login_form, 'make_login_button' ) );
 
+		// Add the login button to the WooCommerce login form.
+		if ( in_array( $settings->woocommerce_login_button, array( 'start', 'end' ), true ) ) {
+			add_action( 'woocommerce_login_form_' . $settings->woocommerce_login_button, array( $login_form, 'print_login_button' ) );
+		}
+
 		$login_form->handle_redirect_login_type_auto();
 	}
 
@@ -187,6 +192,15 @@ class OpenID_Connect_Generic_Login_Form {
 HTML;
 
 		return $login_button;
+	}
+
+	/**
+	 * Print the login button.
+	 *
+	 * @return void
+	 */
+	public function print_login_button() {
+		echo wp_kses_post( $this->make_login_button() );
 	}
 
 	/**
