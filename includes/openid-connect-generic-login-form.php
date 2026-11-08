@@ -130,9 +130,7 @@ class OpenID_Connect_Generic_Login_Form {
 			// Keep the WooCommerce lost password and reset password forms.
 			|| is_wc_endpoint_url( 'lost-password' )
 			// Don't redirect form submissions.
-			|| ! isset( $_SERVER['REQUEST_METHOD'] ) || 'GET' !== $_SERVER['REQUEST_METHOD']
-			// Don't sign the user straight back in after they log out.
-			|| isset( $_GET['loggedout'] ) ) {
+			|| ! isset( $_SERVER['REQUEST_METHOD'] ) || 'GET' !== $_SERVER['REQUEST_METHOD'] ) {
 			return;
 		}
 
@@ -141,14 +139,17 @@ class OpenID_Connect_Generic_Login_Form {
 	}
 
 	/**
-	 * Mark the page WooCommerce shows after logging out, so it is not auto logged in again.
+	 * Send users to the home page after logging out of WooCommerce.
+	 *
+	 * WooCommerce normally returns to My Account, which would send them straight back to
+	 * the identity provider and sign them in again.
 	 *
 	 * @param string $redirect_url The URL WooCommerce redirects to after logging out.
 	 *
 	 * @return string
 	 */
 	public function woocommerce_logout_redirect_url( $redirect_url ) {
-		return add_query_arg( 'loggedout', 'true', $redirect_url );
+		return home_url( '/' );
 	}
 
 	/**
