@@ -186,8 +186,8 @@ class OpenID_Connect_Generic_Login_Form {
 		if ( 'linked' === $this->settings->password_login ) {
 			$blocked = (bool) get_user_option( 'openid-connect-generic-subject-identity', $user->ID );
 		} else {
-			// Any role beyond the basic Subscriber and Customer roles.
-			$blocked = (bool) array_diff( $user->roles, array( 'subscriber', 'customer' ) );
+			// Any role not ticked under Roles Allowed to Use a Password.
+			$blocked = (bool) array_diff( $user->roles, (array) $this->settings->password_login_roles );
 		}
 
 		if ( ! $blocked ) {

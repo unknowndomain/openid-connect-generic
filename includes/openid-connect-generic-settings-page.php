@@ -192,6 +192,10 @@ class OpenID_Connect_Generic_Settings_Page {
 					$callback = 'do_select';
 					break;
 
+				case 'checkboxes':
+					$callback = 'do_checkboxes';
+					break;
+
 				case 'text':
 				default:
 					$callback = 'do_text_field';
@@ -377,9 +381,16 @@ class OpenID_Connect_Generic_Settings_Page {
 				'options'     => array(
 					''       => __( 'Allowed for everyone', 'daggerhart-openid-connect-generic' ),
 					'linked' => __( 'Blocked for users linked to the identity provider', 'daggerhart-openid-connect-generic' ),
-					'roles'  => __( 'Blocked for roles other than Subscriber and Customer', 'daggerhart-openid-connect-generic' ),
+					'roles'  => __( 'Blocked except for the roles below', 'daggerhart-openid-connect-generic' ),
 				),
 				'disabled'    => defined( 'OIDC_PASSWORD_LOGIN' ),
+				'section'     => 'authorization_settings',
+			),
+			'password_login_roles' => array(
+				'title'       => __( 'Roles Allowed to Use a Password', 'daggerhart-openid-connect-generic' ),
+				'description' => __( 'Used when Password Login is "Blocked except for the roles below". Roles added later are blocked until ticked here.', 'daggerhart-openid-connect-generic' ),
+				'type'        => 'checkboxes',
+				'options'     => wp_roles()->get_names(),
 				'section'     => 'authorization_settings',
 			),
 			'alternate_redirect_uri'   => array(
@@ -500,8 +511,12 @@ class OpenID_Connect_Generic_Settings_Page {
 
 		// Loop through settings fields to control what we're saving.
 		foreach ( $this->settings_fields as $key => $field ) {
-			if ( isset( $input[ $key ] ) ) {
+			if ( isset( $input[ $key ] ) && is_array( $input[ $key ] ) ) {
+				$options[ $key ] = array_map( 'sanitize_key', $input[ $key ] );
+			} elseif ( isset( $input[ $key ] ) ) {
 				$options[ $key ] = sanitize_text_field( trim( $input[ $key ] ) );
+			} elseif ( 'checkboxes' === $field['type'] ) {
+				$options[ $key ] = array();
 			} else {
 				$options[ $key ] = '';
 			}
@@ -633,6 +648,29 @@ class OpenID_Connect_Generic_Settings_Page {
 			<?php endforeach; ?>
 		</select>
 		<?php
+		$this->do_field_description( $field );
+	}
+
+	/**
+	 * Output a list of checkboxes, saved as an array of the ticked values.
+	 *
+	 * @param array $field The settings field definition array.
+	 *
+	 * @return void
+	 */
+	public function do_checkboxes( $field ) {
+		$current_values = (array) $this->settings->{ $field['key'] };
+		foreach ( $field['options'] as $value => $text ) :
+			?>
+			<label style="display: block;">
+				<input type="checkbox"
+					name="<?php print esc_attr( $field['name'] ); ?>[]"
+					value="<?php print esc_attr( $value ); ?>"
+					<?php checked( in_array( $value, $current_values, true ) ); ?>>
+				<?php print esc_html( translate_user_role( $text ) ); ?>
+			</label>
+			<?php
+		endforeach;
 		$this->do_field_description( $field );
 	}
 
