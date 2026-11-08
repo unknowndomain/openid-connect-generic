@@ -54,6 +54,7 @@
  * Plugin Settings:
  *
  * @property bool $enforce_privacy          The flag to indicates whether a user us required to be authenticated to access the site.
+ * @property string $password_login         Which users must log in with OpenID Connect instead of a password.
  * @property bool $alternate_redirect_uri   The flag to indicate whether to use the alternative redirect URI.
  * @property bool $token_refresh_enable     The flag whether to support refresh tokens by IDPs.
  * @property bool $link_existing_users      The flag to indicate whether to link to existing WordPress-only accounts or greturn an error.
@@ -104,6 +105,7 @@ class OpenID_Connect_Generic_Option_Settings {
 		'scope'                     => 'OIDC_CLIENT_SCOPE',
 		'create_if_does_not_exist'  => 'OIDC_CREATE_IF_DOES_NOT_EXIST',
 		'enforce_privacy'           => 'OIDC_ENFORCE_PRIVACY',
+		'password_login'            => 'OIDC_PASSWORD_LOGIN',
 		'link_existing_users'       => 'OIDC_LINK_EXISTING_USERS',
 		'redirect_on_logout'        => 'OIDC_REDIRECT_ON_LOGOUT',
 		'redirect_user_back'        => 'OIDC_REDIRECT_USER_BACK',

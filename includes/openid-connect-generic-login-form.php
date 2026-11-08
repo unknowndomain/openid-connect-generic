@@ -71,6 +71,11 @@ class OpenID_Connect_Generic_Login_Form {
 		// Add a shortcode for the login button.
 		add_shortcode( 'openid_connect_generic_login_button', array( $login_form, 'make_login_button' ) );
 
+		// Block password logins for the users set by the Password Login setting.
+		if ( ! empty( $settings->password_login ) ) {
+			add_filter( 'authenticate', array( $login_form, 'block_password_login' ), 30 );
+		}
+
 		$login_form->handle_redirect_login_type_auto();
 	}
 
@@ -94,6 +99,42 @@ class OpenID_Connect_Generic_Login_Form {
 				add_action( 'login_footer', array( $this, 'remove_login_form' ), 99 );
 			}
 		}
+	}
+
+	/**
+	 * Block password logins for users who must log in with OpenID Connect.
+	 *
+	 * Runs after WordPress has checked the password, so a wrong password still gets the
+	 * normal error and nothing reveals which users must use OpenID Connect. OpenID Connect
+	 * logins don't use this filter, and Application Passwords are still allowed.
+	 *
+	 * @param WP_User|WP_Error|null $user The result of the earlier authentication checks.
+	 *
+	 * @return WP_User|WP_Error|null
+	 */
+	public function block_password_login( $user ) {
+		if ( ! $user instanceof WP_User || did_action( 'application_password_did_authenticate' ) ) {
+			return $user;
+		}
+
+		if ( 'linked' === $this->settings->password_login ) {
+			$blocked = (bool) get_user_option( 'openid-connect-generic-subject-identity', $user->ID );
+		} else {
+			// Any role beyond the basic Subscriber and Customer roles.
+			$blocked = (bool) array_diff( $user->roles, array( 'subscriber', 'customer' ) );
+		}
+
+		if ( ! $blocked ) {
+			return $user;
+		}
+
+		$button_text = apply_filters( 'openid-connect-generic-login-button-text', $this->get_login_button_text() );
+
+		return new WP_Error(
+			'password-login-blocked',
+			// translators: %s is the text of the OpenID Connect login button.
+			sprintf( __( 'Please log in with the "%s" button.', 'daggerhart-openid-connect-generic' ), esc_html( $button_text ) )
+		);
 	}
 
 	/**
@@ -137,6 +178,17 @@ class OpenID_Connect_Generic_Login_Form {
 	}
 
 	/**
+	 * The admin-configured login button text, or the default text.
+	 *
+	 * @return string
+	 */
+	private function get_login_button_text() {
+		return ! empty( trim( $this->settings->login_button_text ?? '' ) )
+			? $this->settings->login_button_text
+			: __( 'Login with OpenID Connect', 'daggerhart-openid-connect-generic' );
+	}
+
+	/**
 	 * Create a login button (link).
 	 *
 	 * @param array $atts Array of optional attributes to override login buton
@@ -146,14 +198,9 @@ class OpenID_Connect_Generic_Login_Form {
 	 */
 	public function make_login_button( $atts = array() ) {
 
-		// Use admin-configured button text, or fall back to default.
-		$default_button_text = ! empty( trim( $this->settings->login_button_text ?? '' ) )
-			? $this->settings->login_button_text
-			: __( 'Login with OpenID Connect', 'daggerhart-openid-connect-generic' );
-
 		$atts = shortcode_atts(
 			array(
-				'button_text' => $default_button_text,
+				'button_text' => $this->get_login_button_text(),
 				'endpoint_login' => $this->settings->endpoint_login,
 				'scope' => $this->settings->scope,
 				'client_id' => $this->settings->client_id,
