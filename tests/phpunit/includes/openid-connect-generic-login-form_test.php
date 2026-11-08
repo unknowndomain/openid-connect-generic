@@ -345,6 +345,7 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		$output = ob_get_clean();
 
 		$this->assertStringContainsString( 'openid-connect-login-button', $output );
+		$this->assertMatchesRegularExpression( '/openid-connect-login-button.*openid-connect-login-divider/s', $output, 'Divider should be under the button' );
 		$this->assertFalse( has_action( 'woocommerce_login_form_end' ) );
 	}
 
@@ -376,6 +377,11 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		$output = ob_get_clean();
 
 		$this->assertStringContainsString( 'openid-connect-login-button', $output );
+		$this->assertMatchesRegularExpression( '/openid-connect-login-divider.*openid-connect-login-button/s', $output, 'Divider should be above the button' );
+
+		ob_start();
+		do_action( 'wp_footer' );
+		$this->assertStringContainsString( '.openid-connect-login-divider', ob_get_clean() );
 		$this->assertFalse( has_action( 'woocommerce_login_form_start' ) );
 	}
 
