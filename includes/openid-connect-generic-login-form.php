@@ -172,7 +172,7 @@ class OpenID_Connect_Generic_Login_Form {
 		$icon = '';
 		if ( ! empty( $atts['button_icon'] ) ) {
 			$icon = sprintf(
-				'<img src="%s" alt="" style="height: 1.2em; width: auto; vertical-align: middle; margin-right: 0.5em;">',
+				'<img src="%s" alt="" style="height: 1.6em; width: auto; vertical-align: middle; margin-right: 0.5em;">',
 				esc_url( $atts['button_icon'] )
 			);
 		}
