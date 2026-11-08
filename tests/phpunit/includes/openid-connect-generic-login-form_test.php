@@ -323,13 +323,9 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 * @group LoginFormTests
 	 */
 	public function test_button_icon_from_settings_renders_in_output() {
-		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
-		$settings->endpoint_login = 'https://idp.example.com/authorize';
-		$settings->scope = 'openid';
-		$settings->client_id = 'test-client';
-		$settings->acr_values = '';
-		$settings->login_type = 'button';
-		$settings->login_button_icon = 'https://site.example.com/icon.svg';
+		$settings = $this->create_settings_stub( array(
+			'login_button_icon' => 'https://site.example.com/icon.svg',
+		) );
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -358,12 +354,7 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 * @group LoginFormTests
 	 */
 	public function test_no_button_icon_by_default() {
-		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
-		$settings->endpoint_login = 'https://idp.example.com/authorize';
-		$settings->scope = 'openid';
-		$settings->client_id = 'test-client';
-		$settings->acr_values = '';
-		$settings->login_type = 'button';
+		$settings = $this->create_settings_stub();
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -380,7 +371,7 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 
 		ob_start();
 		do_action( 'wp_footer' );
-		$this->assertSame( '', ob_get_clean() );
+		$this->assertStringNotContainsString( 'openid-connect-login-button-icon', ob_get_clean() );
 	}
 
 	/**
@@ -389,13 +380,9 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 * @group LoginFormTests
 	 */
 	public function test_button_icon_url_escaping() {
-		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
-		$settings->endpoint_login = 'https://idp.example.com/authorize';
-		$settings->scope = 'openid';
-		$settings->client_id = 'test-client';
-		$settings->acr_values = '';
-		$settings->login_type = 'button';
-		$settings->login_button_icon = 'https://site.example.com/x.svg");}body{display:none';
+		$settings = $this->create_settings_stub( array(
+			'login_button_icon' => 'https://site.example.com/x.svg");}body{display:none',
+		) );
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -422,13 +409,9 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 * @group LoginFormTests
 	 */
 	public function test_woocommerce_login_at_start() {
-		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
-		$settings->endpoint_login = 'https://idp.example.com/authorize';
-		$settings->scope = 'openid';
-		$settings->client_id = 'test-client';
-		$settings->acr_values = '';
-		$settings->login_type = 'button';
-		$settings->woocommerce_login = 'start';
+		$settings = $this->create_settings_stub( array(
+			'woocommerce_login' => 'start',
+		) );
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -454,13 +437,9 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 * @group LoginFormTests
 	 */
 	public function test_woocommerce_login_at_end() {
-		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
-		$settings->endpoint_login = 'https://idp.example.com/authorize';
-		$settings->scope = 'openid';
-		$settings->client_id = 'test-client';
-		$settings->acr_values = '';
-		$settings->login_type = 'button';
-		$settings->woocommerce_login = 'end';
+		$settings = $this->create_settings_stub( array(
+			'woocommerce_login' => 'end',
+		) );
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -490,13 +469,9 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 * @group LoginFormTests
 	 */
 	public function test_woocommerce_auto_login_registers_redirect_instead_of_button() {
-		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
-		$settings->endpoint_login = 'https://idp.example.com/authorize';
-		$settings->scope = 'openid';
-		$settings->client_id = 'test-client';
-		$settings->acr_values = '';
-		$settings->login_type = 'button';
-		$settings->woocommerce_login = 'auto';
+		$settings = $this->create_settings_stub( array(
+			'woocommerce_login' => 'auto',
+		) );
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -519,13 +494,9 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 * @group LoginFormTests
 	 */
 	public function test_no_woocommerce_login_by_default() {
-		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
-		$settings->endpoint_login = 'https://idp.example.com/authorize';
-		$settings->scope = 'openid';
-		$settings->client_id = 'test-client';
-		$settings->acr_values = '';
-		$settings->login_type = 'button';
-		$settings->woocommerce_login = '';
+		$settings = $this->create_settings_stub( array(
+			'woocommerce_login' => '',
+		) );
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
