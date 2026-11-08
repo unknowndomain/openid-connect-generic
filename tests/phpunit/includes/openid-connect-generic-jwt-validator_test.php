@@ -271,4 +271,95 @@ class OpenID_Connect_Generic_JWT_Validator_Test extends WP_UnitTestCase {
 		$this->assertInstanceOf( WP_Error::class, $result, 'Should fail with wrong issuer' );
 		$this->assertEquals( 'invalid-iss', $result->get_error_code() );
 	}
+
+	/**
+	 * Create a back-channel logout token payload, merging in the given claims.
+	 *
+	 * @param array $claims Claims to add or override. A null value removes the claim.
+	 *
+	 * @return array
+	 */
+	private function logout_token_payload( $claims = array() ) {
+		$now     = time();
+		$payload = array_merge(
+			array(
+				'iss'    => 'https://example.com',
+				'aud'    => 'test-client-id',
+				'iat'    => $now,
+				'exp'    => $now + 300,
+				'jti'    => 'logout-token-1',
+				'sub'    => 'user123',
+				'sid'    => 'session-abc',
+				'events' => array( 'http://schemas.openid.net/event/backchannel-logout' => new stdClass() ),
+			),
+			$claims
+		);
+		return array_filter(
+			$payload,
+			function ( $value ) {
+				return null !== $value;
+			}
+		);
+	}
+
+	/**
+	 * Test that a valid logout token passes, including one with only a sid.
+	 *
+	 * @group JWTValidatorTests
+	 */
+	public function test_logout_token_validation_succeeds() {
+		$validator = $this->create_validator_with_mocked_jwks( $this->create_jwks( true ) );
+
+		$result = $validator->validate_logout_token( $this->create_jwt_token( $this->logout_token_payload() ) );
+		$this->assertIsArray( $result );
+		$this->assertSame( 'user123', $result['sub'] );
+		$this->assertSame( 'session-abc', $result['sid'] );
+
+		$sid_only = $validator->validate_logout_token( $this->create_jwt_token( $this->logout_token_payload( array( 'sub' => null ) ) ) );
+		$this->assertIsArray( $sid_only );
+	}
+
+	/**
+	 * Test that logout tokens breaking the back-channel logout rules are rejected.
+	 *
+	 * @group JWTValidatorTests
+	 */
+	public function test_logout_token_validation_rejects_invalid_tokens() {
+		$validator = $this->create_validator_with_mocked_jwks( $this->create_jwks( true ) );
+
+		$cases = array(
+			'missing-logout-event' => array( 'events' => null ),
+			'missing-sub-and-sid'  => array(
+				'sub' => null,
+				'sid' => null,
+			),
+			'unexpected-nonce'     => array( 'nonce' => 'abc' ),
+			'missing-jti'          => array( 'jti' => null ),
+			'invalid-aud'          => array( 'aud' => 'another-client' ),
+		);
+
+		foreach ( $cases as $error_code => $claims ) {
+			$result = $validator->validate_logout_token( $this->create_jwt_token( $this->logout_token_payload( $claims ) ) );
+			$this->assertWPError( $result, $error_code );
+			$this->assertSame( $error_code, $result->get_error_code() );
+		}
+	}
+
+	/**
+	 * Test that a logout token with a bad signature is rejected.
+	 *
+	 * @group JWTValidatorTests
+	 */
+	public function test_logout_token_validation_rejects_bad_signature() {
+		$validator = $this->create_validator_with_mocked_jwks( $this->create_jwks( true ) );
+		$token     = $this->create_jwt_token( $this->logout_token_payload() );
+
+		// Swap in a different payload, keeping the original signature.
+		$parts    = explode( '.', $token );
+		$parts[1] = rtrim( strtr( base64_encode( wp_json_encode( $this->logout_token_payload( array( 'sub' => 'someone-else' ) ) ) ), '+/', '-_' ), '=' );
+
+		$result = $validator->validate_logout_token( implode( '.', $parts ) );
+		$this->assertWPError( $result );
+		$this->assertSame( 'jwt-verification-failed', $result->get_error_code() );
+	}
 }
