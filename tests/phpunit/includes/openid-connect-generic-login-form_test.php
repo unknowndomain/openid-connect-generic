@@ -510,7 +510,7 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		$this->assertNotFalse( has_action( 'woocommerce_login_form_start' ) );
 		$this->assertFalse( has_action( 'woocommerce_login_form_end' ) );
 		$this->assertSame(
-			'https://site.example.com/account/?loggedout=true',
+			home_url( '/' ),
 			apply_filters( 'woocommerce_logout_default_redirect_url', 'https://site.example.com/account/' )
 		);
 	}
