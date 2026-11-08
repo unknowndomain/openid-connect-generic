@@ -48,6 +48,13 @@ class OpenID_Connect_Generic_Login_Form {
 	private $icons = array();
 
 	/**
+	 * Whether the "or" divider has been printed on this page.
+	 *
+	 * @var bool
+	 */
+	private $divider_used = false;
+
+	/**
 	 * The class constructor.
 	 *
 	 * @param OpenID_Connect_Generic_Option_Settings $settings       A plugin settings object instance.
@@ -81,6 +88,7 @@ class OpenID_Connect_Generic_Login_Form {
 		// Add the login button to the WooCommerce login form.
 		if ( in_array( $settings->woocommerce_login_button, array( 'start', 'end' ), true ) ) {
 			add_action( 'woocommerce_login_form_' . $settings->woocommerce_login_button, array( $login_form, 'print_login_button' ) );
+			add_action( 'wp_footer', array( $login_form, 'print_divider_styles' ) );
 		}
 
 		// Print the CSS for any login button icons.
@@ -216,12 +224,32 @@ HTML;
 	}
 
 	/**
-	 * Print the login button.
+	 * Print the login button with an "or" divider between it and the login form.
 	 *
 	 * @return void
 	 */
 	public function print_login_button() {
-		echo wp_kses_post( $this->make_login_button() );
+		$this->divider_used = true;
+
+		$divider = '<div class="openid-connect-login-divider"><span>' . esc_html__( 'or', 'daggerhart-openid-connect-generic' ) . '</span></div>';
+		$button  = $this->make_login_button();
+
+		// At the top of the form the divider goes under the button, at the bottom it goes above.
+		$output = 'woocommerce_login_form_start' === current_action() ? $button . $divider : $divider . $button;
+
+		echo wp_kses_post( $output );
+	}
+
+	/**
+	 * Print the CSS for the "or" divider.
+	 *
+	 * @return void
+	 */
+	public function print_divider_styles() {
+		if ( ! $this->divider_used ) {
+			return;
+		}
+		echo '<style id="openid-connect-login-divider">.openid-connect-login-divider{display:flex;align-items:center;gap:0.75em;margin:1.25em 0;color:#767676;font-size:0.9em}.openid-connect-login-divider::before,.openid-connect-login-divider::after{content:"";flex:1;border-top:1px solid #ddd}</style>';
 	}
 
 	/**
