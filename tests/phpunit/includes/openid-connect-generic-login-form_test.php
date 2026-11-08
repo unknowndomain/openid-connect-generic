@@ -342,7 +342,14 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 
 		$output = do_shortcode( '[openid_connect_generic_login_button button_text="Sign In"]' );
 
-		$this->assertMatchesRegularExpression( '/<a[^>]*><img src="https:\/\/site\.example\.com\/icon\.svg"[^>]*>Sign In<\/a>/', $output );
+		$this->assertMatchesRegularExpression( '/<a[^>]*><span class="openid-connect-login-button-icon [^"]+" aria-hidden="true"><\/span>Sign In<\/a>/', $output );
+
+		ob_start();
+		do_action( 'wp_footer' );
+		$styles = ob_get_clean();
+
+		$this->assertStringContainsString( 'mask-image:url("https://site.example.com/icon.svg")', $styles );
+		$this->assertStringContainsString( 'background-color:currentColor', $styles );
 	}
 
 	/**
@@ -369,11 +376,15 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 
 		$output = do_shortcode( '[openid_connect_generic_login_button]' );
 
-		$this->assertStringNotContainsString( '<img', $output );
+		$this->assertStringNotContainsString( 'openid-connect-login-button-icon', $output );
+
+		ob_start();
+		do_action( 'wp_footer' );
+		$this->assertSame( '', ob_get_clean() );
 	}
 
 	/**
-	 * Test that the button icon shortcode attribute is URL escaped.
+	 * Test that the button icon URL cannot break out of the CSS.
 	 *
 	 * @group LoginFormTests
 	 */
@@ -394,9 +405,14 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 
 		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
 
-		$output = do_shortcode( '[openid_connect_generic_login_button button_icon="javascript:alert(1)"]' );
+		do_shortcode( '[openid_connect_generic_login_button button_icon=\'https://site.example.com/x.svg");}body{display:none\']' );
 
-		$this->assertStringNotContainsString( 'javascript:', $output );
+		ob_start();
+		do_action( 'wp_footer' );
+		$styles = ob_get_clean();
+
+		// Quotes are removed from the URL, so it cannot break out of the CSS url() value.
+		$this->assertStringNotContainsString( '");}', $styles );
 	}
 
 	/**

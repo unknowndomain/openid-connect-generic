@@ -41,6 +41,13 @@ class OpenID_Connect_Generic_Login_Form {
 	private $client;
 
 	/**
+	 * Icon URLs used by login buttons on this page, keyed by CSS class.
+	 *
+	 * @var array<string,string>
+	 */
+	private $icons = array();
+
+	/**
 	 * The class constructor.
 	 *
 	 * @param OpenID_Connect_Generic_Option_Settings $settings       A plugin settings object instance.
@@ -75,6 +82,10 @@ class OpenID_Connect_Generic_Login_Form {
 		if ( in_array( $settings->woocommerce_login_button, array( 'start', 'end' ), true ) ) {
 			add_action( 'woocommerce_login_form_' . $settings->woocommerce_login_button, array( $login_form, 'print_login_button' ) );
 		}
+
+		// Print the CSS for any login button icons.
+		add_action( 'wp_footer', array( $login_form, 'print_icon_styles' ) );
+		add_action( 'login_footer', array( $login_form, 'print_icon_styles' ) );
 
 		$login_form->handle_redirect_login_type_auto();
 	}
@@ -175,11 +186,12 @@ class OpenID_Connect_Generic_Login_Form {
 		$text = esc_html( $text );
 
 		$icon = '';
-		if ( ! empty( $atts['button_icon'] ) ) {
-			$icon = sprintf(
-				'<img src="%s" alt="" style="height: 1.6em; width: auto; vertical-align: middle; margin-right: 0.5em;">',
-				esc_url( $atts['button_icon'] )
-			);
+		$icon_url = esc_url_raw( $atts['button_icon'] );
+		if ( ! empty( $icon_url ) ) {
+			// The icon is drawn as a CSS mask so it takes the button's text colour.
+			$icon_class = 'openid-connect-login-button-icon-' . md5( $icon_url );
+			$this->icons[ $icon_class ] = $icon_url;
+			$icon = '<span class="openid-connect-login-button-icon ' . $icon_class . '" aria-hidden="true"></span>';
 		}
 
 		$href = $this->client_wrapper->get_authentication_url(
@@ -210,6 +222,23 @@ HTML;
 	 */
 	public function print_login_button() {
 		echo wp_kses_post( $this->make_login_button() );
+	}
+
+	/**
+	 * Print the CSS that draws login button icons in the button's text colour.
+	 *
+	 * @return void
+	 */
+	public function print_icon_styles() {
+		if ( empty( $this->icons ) ) {
+			return;
+		}
+		$css = '.openid-connect-login-button-icon{display:inline-block;width:1.6em;height:1.6em;margin-right:0.5em;vertical-align:middle;background-color:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}';
+		foreach ( $this->icons as $icon_class => $icon_url ) {
+			$css .= '.' . $icon_class . '{-webkit-mask-image:url("' . $icon_url . '");mask-image:url("' . $icon_url . '")}';
+		}
+		// The URLs were cleaned with esc_url_raw(), which removes quotes and angle brackets.
+		echo '<style id="openid-connect-login-button-icons">' . $css . '</style>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
 	/**
