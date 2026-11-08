@@ -252,9 +252,9 @@ class OpenID_Connect_Generic_Settings_Page {
 				'type'        => 'text',
 				'section'     => 'client_settings',
 			),
-			'woocommerce_login_button' => array(
-				'title'       => __( 'WooCommerce Login Button', 'daggerhart-openid-connect-generic' ),
-				'description' => __( 'Add the OpenID Connect login button to the WooCommerce login form. Auto Login sends logged out visitors on the My Account page straight to the identity provider instead of showing the WooCommerce login form, and sends users to the home page after logging out. The lost password form is still shown.', 'daggerhart-openid-connect-generic' ),
+			'woocommerce_login' => array(
+				'title'       => __( 'WooCommerce Login', 'daggerhart-openid-connect-generic' ),
+				'description' => __( 'Add the OpenID Connect login button to the WooCommerce login forms, or with Auto Login skip the My Account login form.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'select',
 				'options'     => array(
 					''      => __( 'Do not add', 'daggerhart-openid-connect-generic' ),

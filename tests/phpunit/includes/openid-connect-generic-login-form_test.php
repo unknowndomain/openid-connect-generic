@@ -420,14 +420,14 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 *
 	 * @group LoginFormTests
 	 */
-	public function test_woocommerce_login_button_at_start() {
+	public function test_woocommerce_login_at_start() {
 		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
 		$settings->endpoint_login = 'https://idp.example.com/authorize';
 		$settings->scope = 'openid';
 		$settings->client_id = 'test-client';
 		$settings->acr_values = '';
 		$settings->login_type = 'button';
-		$settings->woocommerce_login_button = 'start';
+		$settings->woocommerce_login = 'start';
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -452,14 +452,14 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 *
 	 * @group LoginFormTests
 	 */
-	public function test_woocommerce_login_button_at_end() {
+	public function test_woocommerce_login_at_end() {
 		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
 		$settings->endpoint_login = 'https://idp.example.com/authorize';
 		$settings->scope = 'openid';
 		$settings->client_id = 'test-client';
 		$settings->acr_values = '';
 		$settings->login_type = 'button';
-		$settings->woocommerce_login_button = 'end';
+		$settings->woocommerce_login = 'end';
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -484,18 +484,18 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Test that WooCommerce auto login redirects My Account and keeps a fallback button.
+	 * Test that WooCommerce auto login redirects My Account instead of adding the button.
 	 *
 	 * @group LoginFormTests
 	 */
-	public function test_woocommerce_auto_login_registers_redirect_and_fallback_button() {
+	public function test_woocommerce_auto_login_registers_redirect_instead_of_button() {
 		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
 		$settings->endpoint_login = 'https://idp.example.com/authorize';
 		$settings->scope = 'openid';
 		$settings->client_id = 'test-client';
 		$settings->acr_values = '';
 		$settings->login_type = 'button';
-		$settings->woocommerce_login_button = 'auto';
+		$settings->woocommerce_login = 'auto';
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -507,12 +507,9 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
 
 		$this->assertNotFalse( has_action( 'template_redirect' ) );
-		$this->assertNotFalse( has_action( 'woocommerce_login_form_start' ) );
+		$this->assertNotFalse( has_filter( 'woocommerce_logout_default_redirect_url' ) );
+		$this->assertFalse( has_action( 'woocommerce_login_form_start' ) );
 		$this->assertFalse( has_action( 'woocommerce_login_form_end' ) );
-		$this->assertSame(
-			home_url( '/' ),
-			apply_filters( 'woocommerce_logout_default_redirect_url', 'https://site.example.com/account/' )
-		);
 	}
 
 	/**
@@ -520,14 +517,14 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	 *
 	 * @group LoginFormTests
 	 */
-	public function test_no_woocommerce_login_button_by_default() {
+	public function test_no_woocommerce_login_by_default() {
 		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
 		$settings->endpoint_login = 'https://idp.example.com/authorize';
 		$settings->scope = 'openid';
 		$settings->client_id = 'test-client';
 		$settings->acr_values = '';
 		$settings->login_type = 'button';
-		$settings->woocommerce_login_button = '';
+		$settings->woocommerce_login = '';
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
