@@ -78,9 +78,16 @@ class OpenID_Connect_Generic_Login_Form {
 		// Add a shortcode for the login button.
 		add_shortcode( 'openid_connect_generic_login_button', array( $login_form, 'make_login_button' ) );
 
-		// Add the login button to the WooCommerce login form.
-		if ( in_array( $settings->woocommerce_login_button, array( 'start', 'end' ), true ) ) {
-			add_action( 'woocommerce_login_form_' . $settings->woocommerce_login_button, array( $login_form, 'print_login_button' ) );
+		// Add the login button to the WooCommerce login form, or skip the form with auto login.
+		$woocommerce_login_button = $settings->woocommerce_login_button;
+		if ( 'auto' === $woocommerce_login_button ) {
+			add_action( 'template_redirect', array( $login_form, 'handle_redirect_woocommerce_auto' ) );
+			add_filter( 'woocommerce_logout_default_redirect_url', array( $login_form, 'woocommerce_logout_redirect_url' ) );
+			// Shown when the form is not skipped, for example just after logging out.
+			$woocommerce_login_button = 'start';
+		}
+		if ( in_array( $woocommerce_login_button, array( 'start', 'end' ), true ) ) {
+			add_action( 'woocommerce_login_form_' . $woocommerce_login_button, array( $login_form, 'print_login_button' ) );
 			add_action( 'wp_footer', array( $login_form, 'print_divider_styles' ) );
 		}
 
@@ -107,6 +114,41 @@ class OpenID_Connect_Generic_Login_Form {
 				add_action( 'login_footer', array( $this, 'remove_login_form' ), 99 );
 			}
 		}
+	}
+
+	/**
+	 * WooCommerce Auto Login redirect.
+	 *
+	 * Sends logged out visitors on the WooCommerce My Account page straight to the
+	 * identity provider instead of showing the WooCommerce login form.
+	 *
+	 * @return void
+	 */
+	public function handle_redirect_woocommerce_auto() {
+		if ( is_user_logged_in()
+			|| ! function_exists( 'is_account_page' ) || ! is_account_page()
+			// Keep the WooCommerce lost password and reset password forms.
+			|| is_wc_endpoint_url( 'lost-password' )
+			// Don't redirect form submissions.
+			|| ! isset( $_SERVER['REQUEST_METHOD'] ) || 'GET' !== $_SERVER['REQUEST_METHOD']
+			// Don't sign the user straight back in after they log out.
+			|| isset( $_GET['loggedout'] ) ) {
+			return;
+		}
+
+		wp_redirect( $this->client_wrapper->get_authentication_url( array( 'redirect_to' => wc_get_page_permalink( 'myaccount' ) ) ) );
+		exit;
+	}
+
+	/**
+	 * Mark the page WooCommerce shows after logging out, so it is not auto logged in again.
+	 *
+	 * @param string $redirect_url The URL WooCommerce redirects to after logging out.
+	 *
+	 * @return string
+	 */
+	public function woocommerce_logout_redirect_url( $redirect_url ) {
+		return add_query_arg( 'loggedout', 'true', $redirect_url );
 	}
 
 	/**
