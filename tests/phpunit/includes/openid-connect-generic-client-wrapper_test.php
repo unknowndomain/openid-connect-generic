@@ -741,4 +741,24 @@ class OpenID_Connect_Generic_Client_Wrapper_Test extends WP_UnitTestCase {
 		$sessions = WP_Session_Tokens::get_instance( $user->ID )->get_all();
 		$this->assertSame( 'sid-at-login', end( $sessions )[ OpenID_Connect_Generic_Client_Wrapper::SESSION_ID_KEY ] );
 	}
+
+	/**
+	 * Test that a sid with database wildcards can't match another user's sessions.
+	 *
+	 * @group ClientWrapperTests
+	 */
+	public function test_backchannel_logout_sid_wildcards_match_nobody() {
+		list( $user_id, $manager ) = $this->create_linked_user_with_sessions();
+
+		foreach ( array( '%', 'sid-%', 'sid-___', '_' ) as $i => $sid ) {
+			$claims = array(
+				'jti' => 'jti-wildcard-' . $i,
+				'exp' => time() + 300,
+				'sid' => $sid,
+			);
+			$this->assertTrue( $this->create_backchannel_wrapper( $claims )->backchannel_logout( 'token' ) );
+		}
+
+		$this->assertCount( 2, $manager->get_all(), 'No session should be ended by a wildcard sid' );
+	}
 }
