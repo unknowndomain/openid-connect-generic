@@ -399,4 +399,92 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'javascript:', $output );
 	}
 
+	/**
+	 * Test that the login button is added to the top of the WooCommerce login form.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_woocommerce_login_button_at_start() {
+		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
+		$settings->endpoint_login = 'https://idp.example.com/authorize';
+		$settings->scope = 'openid';
+		$settings->client_id = 'test-client';
+		$settings->acr_values = '';
+		$settings->login_type = 'button';
+		$settings->woocommerce_login_button = 'start';
+
+		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
+		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
+
+		$client_wrapper = $this->createMock( OpenID_Connect_Generic_Client_Wrapper::class );
+		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
+		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
+
+		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
+
+		ob_start();
+		do_action( 'woocommerce_login_form_start' );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'openid-connect-login-button', $output );
+		$this->assertFalse( has_action( 'woocommerce_login_form_end' ) );
+	}
+
+	/**
+	 * Test that the login button is added to the bottom of the WooCommerce login form.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_woocommerce_login_button_at_end() {
+		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
+		$settings->endpoint_login = 'https://idp.example.com/authorize';
+		$settings->scope = 'openid';
+		$settings->client_id = 'test-client';
+		$settings->acr_values = '';
+		$settings->login_type = 'button';
+		$settings->woocommerce_login_button = 'end';
+
+		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
+		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
+
+		$client_wrapper = $this->createMock( OpenID_Connect_Generic_Client_Wrapper::class );
+		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
+		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
+
+		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
+
+		ob_start();
+		do_action( 'woocommerce_login_form_end' );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'openid-connect-login-button', $output );
+		$this->assertFalse( has_action( 'woocommerce_login_form_start' ) );
+	}
+
+	/**
+	 * Test that the login button is not added to the WooCommerce login form by default.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_no_woocommerce_login_button_by_default() {
+		$settings = $this->createMock( OpenID_Connect_Generic_Option_Settings::class );
+		$settings->endpoint_login = 'https://idp.example.com/authorize';
+		$settings->scope = 'openid';
+		$settings->client_id = 'test-client';
+		$settings->acr_values = '';
+		$settings->login_type = 'button';
+		$settings->woocommerce_login_button = '';
+
+		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
+		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
+
+		$client_wrapper = $this->createMock( OpenID_Connect_Generic_Client_Wrapper::class );
+		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
+		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
+
+		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
+
+		$this->assertFalse( has_action( 'woocommerce_login_form_start' ) );
+		$this->assertFalse( has_action( 'woocommerce_login_form_end' ) );
+	}
 }
