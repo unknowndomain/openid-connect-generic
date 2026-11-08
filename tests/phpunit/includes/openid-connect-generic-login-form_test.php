@@ -342,13 +342,13 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 
 		$output = do_shortcode( '[openid_connect_generic_login_button button_text="Sign In"]' );
 
-		$this->assertMatchesRegularExpression( '/<a[^>]*><span class="openid-connect-login-button-icon [^"]+" aria-hidden="true"><\/span>Sign In<\/a>/', $output );
+		$this->assertMatchesRegularExpression( '/<a[^>]*><span class="openid-connect-login-button-icon" aria-hidden="true"><\/span>Sign In<\/a>/', $output );
 
 		ob_start();
 		do_action( 'wp_footer' );
 		$styles = ob_get_clean();
 
-		$this->assertStringContainsString( 'mask-image:url("https://site.example.com/icon.svg")', $styles );
+		$this->assertStringContainsString( 'mask:url("https://site.example.com/icon.svg") center/contain no-repeat', $styles );
 		$this->assertStringContainsString( 'background-color:currentColor', $styles );
 	}
 
@@ -395,6 +395,7 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		$settings->client_id = 'test-client';
 		$settings->acr_values = '';
 		$settings->login_type = 'button';
+		$settings->login_button_icon = 'https://site.example.com/x.svg");}body{display:none';
 
 		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
 		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
@@ -405,7 +406,7 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 
 		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
 
-		do_shortcode( '[openid_connect_generic_login_button button_icon=\'https://site.example.com/x.svg");}body{display:none\']' );
+		do_shortcode( '[openid_connect_generic_login_button]' );
 
 		ob_start();
 		do_action( 'wp_footer' );
