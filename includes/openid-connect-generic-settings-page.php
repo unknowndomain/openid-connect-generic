@@ -493,7 +493,8 @@ class OpenID_Connect_Generic_Settings_Page {
 		// Loop through settings fields to control what we're saving.
 		foreach ( $this->settings_fields as $key => $field ) {
 			if ( isset( $input[ $key ] ) && is_array( $input[ $key ] ) ) {
-				$options[ $key ] = array_map( 'sanitize_key', $input[ $key ] );
+				// Only keep values offered by the field.
+				$options[ $key ] = array_values( array_intersect( $input[ $key ], array_keys( $field['options'] ?? array() ) ) );
 			} elseif ( isset( $input[ $key ] ) ) {
 				$options[ $key ] = sanitize_text_field( trim( $input[ $key ] ) );
 			} elseif ( 'checkboxes' === $field['type'] ) {
