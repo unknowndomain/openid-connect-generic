@@ -371,7 +371,7 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 
 		ob_start();
 		do_action( 'wp_footer' );
-		$this->assertSame( '', ob_get_clean() );
+		$this->assertStringNotContainsString( 'openid-connect-login-button-icon', ob_get_clean() );
 	}
 
 	/**

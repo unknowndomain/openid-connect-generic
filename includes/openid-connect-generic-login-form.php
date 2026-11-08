@@ -180,8 +180,9 @@ class OpenID_Connect_Generic_Login_Form {
 		$text = esc_html( $text );
 
 		// The icon is drawn by print_icon_styles() in the button's text colour.
-		$icon = '';
-		if ( ! empty( $this->settings->login_button_icon ) ) {
+		$icon     = '';
+		$icon_url = $this->settings->login_button_icon;
+		if ( ! empty( $icon_url ) ) {
 			$this->icon_used = true;
 			$icon = '<span class="openid-connect-login-button-icon" aria-hidden="true"></span>';
 		}
