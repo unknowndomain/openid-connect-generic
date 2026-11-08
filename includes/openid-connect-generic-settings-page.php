@@ -370,6 +370,18 @@ class OpenID_Connect_Generic_Settings_Page {
 				'disabled'    => defined( 'OIDC_ENFORCE_PRIVACY' ),
 				'section'     => 'authorization_settings',
 			),
+			'password_login'    => array(
+				'title'       => __( 'Password Login', 'daggerhart-openid-connect-generic' ),
+				'description' => __( 'Block password logins for some users, so they must log in with OpenID Connect. Application Passwords still work.', 'daggerhart-openid-connect-generic' ),
+				'type'        => 'select',
+				'options'     => array(
+					''       => __( 'Allowed for everyone', 'daggerhart-openid-connect-generic' ),
+					'linked' => __( 'Blocked for users linked to the identity provider', 'daggerhart-openid-connect-generic' ),
+					'roles'  => __( 'Blocked for roles other than Subscriber and Customer', 'daggerhart-openid-connect-generic' ),
+				),
+				'disabled'    => defined( 'OIDC_PASSWORD_LOGIN' ),
+				'section'     => 'authorization_settings',
+			),
 			'alternate_redirect_uri'   => array(
 				'title'       => __( 'Alternate Redirect URI', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'Provide an alternative redirect route. Useful if your server is causing issues with the default admin-ajax method. You must flush rewrite rules after changing this setting. This can be done by saving the Permalinks settings page.', 'daggerhart-openid-connect-generic' ),
