@@ -50,7 +50,12 @@ intermediate
 .idea
 cache
 node_modules
-vendor
+# SLMS fork: runtime vendor is committed so the slms branch deploys with git pull.
+/vendor/*
+!/vendor/autoload.php
+!/vendor/composer/
+!/vendor/firebase/
+/vendor/composer/installers/
 dist
 
 # WordPress Development environment directories to ignore.
