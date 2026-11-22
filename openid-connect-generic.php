@@ -16,7 +16,7 @@
  * Plugin Name:       OpenID Connect Generic
  * Plugin URI:        https://github.com/oidc-wp/openid-connect-generic
  * Description:       Connect to an OpenID Connect identity provider using Authorization Code Flow.
- * Version:           3.11.5
+ * Version:           3.11.5.1
  * Requires at least: 6.7
  * Requires PHP:      8.2
  * Author:            daggerhart
@@ -25,7 +25,9 @@
  * Domain Path:       /languages
  * License:           GPL-2.0+
  * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
- * GitHub Plugin URI: https://github.com/oidc-wp/openid-connect-generic
+ * GitHub Plugin URI: https://github.com/unknowndomain/openid-connect-generic
+ * Primary Branch:    slms
+ * Update URI:        false
  */
 
 /*
@@ -105,7 +107,7 @@ class OpenID_Connect_Generic {
 	 *
 	 * @var string
 	 */
-	const VERSION = '3.11.5';
+	const VERSION = '3.11.5.1';
 
 	/**
 	 * Option flagging the admin notice about linking users without a verified email.
