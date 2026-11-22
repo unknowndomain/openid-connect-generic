@@ -236,8 +236,9 @@ class OpenID_Connect_Generic_Settings_Page {
 				'description' => __( 'Select how the client (login form) should provide login options.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'select',
 				'options'     => array(
-					'button' => __( 'OpenID Connect button on login form', 'daggerhart-openid-connect-generic' ),
-					'auto'   => __( 'Auto Login - SSO', 'daggerhart-openid-connect-generic' ),
+					'button'    => __( 'OpenID Connect button on login form', 'daggerhart-openid-connect-generic' ),
+					'auto'      => __( 'Auto Login - SSO', 'daggerhart-openid-connect-generic' ),
+					'shortcode' => __( 'Shortcode Only', 'daggerhart-openid-connect-generic' ),
 				),
 				'disabled'    => defined( 'OIDC_LOGIN_TYPE' ),
 				'section'     => 'client_settings',
@@ -333,7 +334,7 @@ class OpenID_Connect_Generic_Settings_Page {
 			),
 			'issuer' => array(
 				'title'       => __( 'Issuer', 'daggerhart-openid-connect-generic' ),
-				'description' => __( 'Identity provider issuer URL for JWT validation. If not set, the issuer will be automatically derived from the Login Endpoint URL. Only configure this if your IDP uses a different issuer than the base URL of the login endpoint.', 'daggerhart-openid-connect-generic' ),
+				'description' => __( 'Identity provider issuer URL for JWT validation. If not set, the issuer will be automatically derived from the Login Endpoint URL. Only configure this if your IDP uses a different issuer than the base URL of the login endpoint. For Microsoft Entra ID multitenant apps, use https://login.microsoftonline.com/{tenantid}/v2.0: {tenantid} is replaced with the tenant ID from each token.', 'daggerhart-openid-connect-generic' ),
 				'example'     => 'https://example.com',
 				'type'        => 'text',
 				'disabled'    => defined( 'OIDC_ISSUER' ),
@@ -390,7 +391,10 @@ class OpenID_Connect_Generic_Settings_Page {
 				'title'       => __( 'Roles Allowed to Use a Password', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'Used when Password Login is "Blocked except for the roles below". Roles added later are blocked until ticked here.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'checkboxes',
-				'options'     => wp_roles()->get_names(),
+				'options'     => array_map( 'translate_user_role', wp_roles()->get_names() ) + array(
+					OpenID_Connect_Generic_Login_Form::NO_ROLE => __( 'Users with no role', 'daggerhart-openid-connect-generic' ),
+				),
+				'disabled'    => defined( 'OIDC_PASSWORD_LOGIN_ROLES' ),
 				'section'     => 'authorization_settings',
 			),
 			'alternate_redirect_uri'   => array(
@@ -432,6 +436,13 @@ class OpenID_Connect_Generic_Settings_Page {
 				'type'        => 'number',
 				'section'     => 'client_settings',
 			),
+			'enable_pkce'   => array(
+				'title'       => __( 'Use PKCE', 'daggerhart-openid-connect-generic' ),
+				'description' => __( 'Send a PKCE (S256) code challenge with each login, as recommended by OAuth 2.0 security guidance. Most IDPs support it. Turn it off only if your IDP rejects logins with it.', 'daggerhart-openid-connect-generic' ),
+				'type'        => 'checkbox',
+				'disabled'    => defined( 'OIDC_ENABLE_PKCE' ),
+				'section'     => 'client_settings',
+			),
 			'token_refresh_enable'   => array(
 				'title'       => __( 'Enable Refresh Token', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'If checked, support refresh tokens used to obtain access tokens from supported IDPs.', 'daggerhart-openid-connect-generic' ),
@@ -457,6 +468,14 @@ class OpenID_Connect_Generic_Settings_Page {
 				'description' => __( 'If a WordPress account already exists with the same identity as a newly-authenticated user over OpenID Connect, login as that user instead of generating an error.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'checkbox',
 				'disabled'    => defined( 'OIDC_LINK_EXISTING_USERS' ),
+				'section'     => 'user_settings',
+			),
+			'link_unverified_users'   => array(
+				'title'       => __( 'Link Users Without Verified Email', 'daggerhart-openid-connect-generic' ),
+				// translators: %1$s HTML tags for layout/styles (strong tag start with warning class), %2$s closing HTML tag for styles.
+				'description' => sprintf( __( 'Allow Link Existing Users to link an account when the IDP does not confirm the email address is verified (for example, Microsoft Entra ID), or when Identify with User Name is checked. Accounts are never linked when the IDP says the email is not verified. %1$sOnly enable this if your IDP prevents people from using an email address or user name that belongs to someone else. Otherwise anyone at the IDP could log in as an existing WordPress user, including administrators.%2$s', 'daggerhart-openid-connect-generic' ), '<br><strong class="oidc-warning">', '</strong>' ),
+				'type'        => 'checkbox',
+				'disabled'    => defined( 'OIDC_LINK_UNVERIFIED_USERS' ),
 				'section'     => 'user_settings',
 			),
 			'create_if_does_not_exist'   => array(
@@ -548,11 +567,10 @@ class OpenID_Connect_Generic_Settings_Page {
 
 		wp_enqueue_style( 'daggerhart-openid-connect-generic-admin', plugin_dir_url( __DIR__ ) . 'css/styles-admin.css', array(), OpenID_Connect_Generic::VERSION, 'all' );
 
-		$redirect_uri = admin_url( 'admin-ajax.php?action=openid-connect-authorize' );
+		$plugin = OpenID_Connect_Generic::instance();
 
-		if ( $this->settings->alternate_redirect_uri ) {
-			$redirect_uri = site_url( '/openid-connect-authorize' );
-		}
+		$redirect_uri = $plugin->get_redirect_uri( $this->settings );
+
 		?>
 		<div class="wrap">
 			<h2><?php print esc_html( get_admin_page_title() ); ?></h2>
@@ -672,17 +690,21 @@ class OpenID_Connect_Generic_Settings_Page {
 	 */
 	public function do_checkboxes( $field ) {
 		$current_values = (array) $this->settings->{ $field['key'] };
-		foreach ( $field['options'] as $value => $text ) :
-			?>
-			<label style="display: block;">
-				<input type="checkbox"
-					name="<?php print esc_attr( $field['name'] ); ?>[]"
-					value="<?php print esc_attr( $value ); ?>"
-					<?php checked( in_array( $value, $current_values, true ) ); ?>>
-				<?php print esc_html( translate_user_role( $text ) ); ?>
-			</label>
-			<?php
-		endforeach;
+		?>
+		<fieldset>
+			<legend class="screen-reader-text"><span><?php print esc_html( $field['title'] ); ?></span></legend>
+			<?php foreach ( $field['options'] as $value => $text ) : ?>
+				<label>
+					<input type="checkbox"
+						name="<?php print esc_attr( $field['name'] ); ?>[]"
+						value="<?php print esc_attr( $value ); ?>"
+						<?php checked( in_array( $value, $current_values, true ) ); ?>
+						<?php disabled( ! empty( $field['disabled'] ) ); ?>>
+					<?php print esc_html( $text ); ?>
+				</label><br>
+			<?php endforeach; ?>
+		</fieldset>
+		<?php
 		$this->do_field_description( $field );
 	}
 

@@ -82,6 +82,9 @@ On the settings page for this plugin (Dashboard > Settings > OpenID Connect Gene
 - Userinfo Endpoint URL: `OIDC_ENDPOINT_USERINFO_URL`
 - Token Validation Endpoint URL: `OIDC_ENDPOINT_TOKEN_URL`
 - End Session Endpoint URL: `OIDC_ENDPOINT_LOGOUT_URL`
+- JWKS URI: `OIDC_ENDPOINT_JWKS_URL`
+- Issuer: `OIDC_ISSUER`
+- ACR Values: `OIDC_ACR_VALUES`
 - OpenID scope: `OIDC_CLIENT_SCOPE` (space separated)
 - OpenID login type: `OIDC_LOGIN_TYPE` ('button' or 'auto')
 - Enforce privacy: `OIDC_ENFORCE_PRIVACY` (boolean)
@@ -89,6 +92,9 @@ On the settings page for this plugin (Dashboard > Settings > OpenID Connect Gene
 - Link existing user: `OIDC_LINK_EXISTING_USERS` (boolean)
 - Redirect user back to origin page: `OIDC_REDIRECT_USER_BACK` (boolean)
 - Redirect on logout: `OIDC_REDIRECT_ON_LOGOUT` (boolean)
+- Password login: `OIDC_PASSWORD_LOGIN` ('' for allowed for everyone, 'linked' or 'roles')
+- Roles allowed to use a password: `OIDC_PASSWORD_LOGIN_ROLES` (array of role names, for example `array( 'subscriber', 'customer' )`, plus `'_no_role'` to allow users with no role)
+- Back-channel logout: `OIDC_BACKCHANNEL_LOGOUT` (boolean)
 
 ## Hooks
 

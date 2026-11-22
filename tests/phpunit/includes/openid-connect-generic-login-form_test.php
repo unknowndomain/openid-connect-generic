@@ -338,6 +338,8 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
 		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
 
+		// Only the plugin's footer output is under test; core's wp_footer callbacks emit deprecation notices.
+		remove_all_actions( 'wp_footer' );
 		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
 
 		$output = do_shortcode( '[openid_connect_generic_login_button button_text="Sign In"]' );
@@ -367,6 +369,8 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
 		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
 
+		// Only the plugin's footer output is under test; core's wp_footer callbacks emit deprecation notices.
+		remove_all_actions( 'wp_footer' );
 		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
 
 		$output = do_shortcode( '[openid_connect_generic_login_button]' );
@@ -395,6 +399,8 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
 		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
 
+		// Only the plugin's footer output is under test; core's wp_footer callbacks emit deprecation notices.
+		remove_all_actions( 'wp_footer' );
 		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
 
 		do_shortcode( '[openid_connect_generic_login_button]' );
@@ -405,6 +411,51 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 
 		// Quotes are removed from the URL, so it cannot break out of the CSS url() value.
 		$this->assertStringNotContainsString( '");}', $styles );
+	}
+
+	/**
+	 * Test where the login button appears for each login type.
+	 *
+	 * @group LoginFormTests
+	 *
+	 * @dataProvider login_type_provider
+	 *
+	 * @param string $login_type        The login type setting.
+	 * @param bool   $button_on_login   Whether wp-login.php shows the button.
+	 */
+	public function test_login_type_controls_login_page_button( $login_type, $button_on_login ) {
+		$settings = $this->create_settings_stub( array( 'login_type' => $login_type ) );
+
+		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
+		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
+
+		$client_wrapper = $this->createMock( OpenID_Connect_Generic_Client_Wrapper::class );
+		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
+		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
+
+		$login_form = new OpenID_Connect_Generic_Login_Form( $settings, $client_wrapper, $client );
+
+		$login_page = $login_form->handle_login_page( '' );
+		if ( $button_on_login ) {
+			$this->assertStringContainsString( 'openid-connect-login-button', $login_page );
+		} else {
+			$this->assertStringNotContainsString( 'openid-connect-login-button', $login_page );
+		}
+
+		// The shortcode button works for every login type.
+		$this->assertStringContainsString( 'openid-connect-login-button', $login_form->make_login_button() );
+	}
+
+	/**
+	 * Data provider for test_login_type_controls_login_page_button.
+	 *
+	 * @return array
+	 */
+	public function login_type_provider() {
+		return array(
+			'button'    => array( 'button', true ),
+			'shortcode' => array( 'shortcode', false ),
+		);
 	}
 
 	/**
@@ -452,6 +503,8 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
 		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
 
+		// Only the plugin's footer output is under test; core's wp_footer callbacks emit deprecation notices.
+		remove_all_actions( 'wp_footer' );
 		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
 
 		ob_start();
@@ -706,4 +759,111 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		);
 		$this->assertWPError( $allow_none->block_password_login( $editor ) );
 	}
+
+	/**
+	 * Test that users with no role are blocked unless "Users with no role" is ticked.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_password_login_users_with_no_role() {
+		$no_role = self::factory()->user->create_and_get( array( 'role' => '' ) );
+		$this->assertSame( array(), $no_role->roles );
+
+		$block_no_role = $this->create_login_form(
+			array(
+				'password_login'       => 'roles',
+				'password_login_roles' => array( 'subscriber' ),
+			)
+		);
+		$this->assertWPError( $block_no_role->block_password_login( $no_role ) );
+		$this->assertWPError( $block_no_role->block_password_reset( true, $no_role->ID ) );
+
+		$allow_no_role = $this->create_login_form(
+			array(
+				'password_login'       => 'roles',
+				'password_login_roles' => array( 'subscriber', OpenID_Connect_Generic_Login_Form::NO_ROLE ),
+			)
+		);
+		$this->assertSame( $no_role, $allow_no_role->block_password_login( $no_role ) );
+	}
+
+	/**
+	 * Test that password resets are left alone by default.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_password_reset_allowed_by_default() {
+		OpenID_Connect_Generic_Login_Form::register(
+			$this->create_settings_stub(),
+			$this->createMock( OpenID_Connect_Generic_Client_Wrapper::class ),
+			$this->createMock( OpenID_Connect_Generic_Client::class )
+		);
+		$editor = self::factory()->user->create_and_get( array( 'role' => 'editor' ) );
+
+		$this->assertIsString( get_password_reset_key( $editor ) );
+	}
+
+	/**
+	 * Test that users who can't log in with a password can't reset it either.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_password_reset_blocked_for_roles() {
+		OpenID_Connect_Generic_Login_Form::register(
+			$this->create_settings_stub(
+				array(
+					'password_login'       => 'roles',
+					'password_login_roles' => array( 'subscriber' ),
+					'login_button_text'    => 'Log in with SSO',
+				)
+			),
+			$this->createMock( OpenID_Connect_Generic_Client_Wrapper::class ),
+			$this->createMock( OpenID_Connect_Generic_Client::class )
+		);
+		$editor     = self::factory()->user->create_and_get( array( 'role' => 'editor' ) );
+		$subscriber = self::factory()->user->create_and_get( array( 'role' => 'subscriber' ) );
+
+		$result = get_password_reset_key( $editor );
+		$this->assertWPError( $result );
+		$this->assertSame( 'password-reset-blocked', $result->get_error_code() );
+		$this->assertStringContainsString( '"Log in with SSO"', $result->get_error_message() );
+
+		$this->assertIsString( get_password_reset_key( $subscriber ) );
+	}
+
+	/**
+	 * Test that only users linked to the identity provider can't reset their password.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_password_reset_blocked_for_linked_users() {
+		$login_form = $this->create_login_form( array( 'password_login' => 'linked' ) );
+		$linked     = self::factory()->user->create_and_get( array( 'role' => 'subscriber' ) );
+		$unlinked   = self::factory()->user->create_and_get( array( 'role' => 'administrator' ) );
+		update_user_option( $linked->ID, 'openid-connect-generic-subject-identity', 'idp-user-1', true );
+
+		$this->assertWPError( $login_form->block_password_reset( true, $linked->ID ) );
+		$this->assertTrue( $login_form->block_password_reset( true, $unlinked->ID ) );
+	}
+
+	/**
+	 * Test that a password reset already refused by WordPress or another plugin stays refused.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_password_reset_passes_through_earlier_refusals() {
+		$login_form = $this->create_login_form(
+			array(
+				'password_login'       => 'roles',
+				'password_login_roles' => array(),
+			)
+		);
+		$editor     = self::factory()->user->create_and_get( array( 'role' => 'editor' ) );
+		$error      = new WP_Error( 'no_password_reset', 'Not allowed.' );
+
+		$this->assertFalse( $login_form->block_password_reset( false, $editor->ID ) );
+		$this->assertSame( $error, $login_form->block_password_reset( $error, $editor->ID ) );
+		$this->assertTrue( $login_form->block_password_reset( true, 0 ) );
+	}
+
 }

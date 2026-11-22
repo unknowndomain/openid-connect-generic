@@ -20,6 +20,13 @@
 class OpenID_Connect_Generic_Login_Form {
 
 	/**
+	 * The Roles Allowed to Use a Password value for users with no role on the site.
+	 *
+	 * @var string
+	 */
+	const NO_ROLE = '_no_role';
+
+	/**
 	 * Plugin settings object.
 	 *
 	 * @var OpenID_Connect_Generic_Option_Settings
@@ -92,6 +99,10 @@ class OpenID_Connect_Generic_Login_Form {
 		// Add a shortcode for the login button.
 		add_shortcode( 'openid_connect_generic_login_button', array( $login_form, 'make_login_button' ) );
 
+		// Print the CSS for the login button icon.
+		add_action( 'wp_footer', array( $login_form, 'print_icon_styles' ) );
+		add_action( 'login_footer', array( $login_form, 'print_icon_styles' ) );
+
 		// Add the login button to the WooCommerce login forms, or skip My Account's form with auto login.
 		if ( 'auto' === $settings->woocommerce_login ) {
 			add_action( 'template_redirect', array( $login_form, 'handle_redirect_woocommerce_auto' ) );
@@ -101,15 +112,12 @@ class OpenID_Connect_Generic_Login_Form {
 			add_action( 'wp_footer', array( $login_form, 'print_divider_styles' ) );
 		}
 
-		// Print the CSS for the login button icon.
-		add_action( 'wp_footer', array( $login_form, 'print_icon_styles' ) );
-		add_action( 'login_footer', array( $login_form, 'print_icon_styles' ) );
-
-		// Block password logins for the users set by the Password Login setting.
+		// Block password logins and password resets for the users set by the Password Login setting.
 		if ( ! empty( $settings->password_login ) ) {
 			add_filter( 'authenticate', array( $login_form, 'start_password_login_check' ), PHP_INT_MIN );
 			add_action( 'application_password_did_authenticate', array( $login_form, 'record_application_password_login' ) );
 			add_filter( 'authenticate', array( $login_form, 'block_password_login' ), 30 );
+			add_filter( 'allow_password_reset', array( $login_form, 'block_password_reset' ), 10, 2 );
 		}
 
 		$login_form->handle_redirect_login_type_auto();
@@ -126,6 +134,8 @@ class OpenID_Connect_Generic_Login_Form {
 			&& ( 'auto' == $this->settings->login_type || ! empty( $_GET['force_redirect'] ) )
 			// Don't send users to the IDP on logout or post password protected authentication.
 			&& ( ! isset( $_GET['action'] ) || ! in_array( $_GET['action'], array( 'logout', 'postpass' ) ) )
+			// Let a login started from a stored state continue to the IDP.
+			&& ! isset( $_GET[ OpenID_Connect_Generic_Client_Wrapper::LOGIN_START_QUERY_VAR ] )
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- WP Login Form doesn't have a nonce.
 			&& ! isset( $_POST['wp-submit'] ) ) {
 			if ( ! isset( $_GET['login-error'] ) ) {
@@ -218,24 +228,65 @@ class OpenID_Connect_Generic_Login_Form {
 			return $user;
 		}
 
-		if ( 'linked' === $this->settings->password_login ) {
-			$blocked = (bool) get_user_option( 'openid-connect-generic-subject-identity', $user->ID );
-		} else {
-			// Any role not ticked under Roles Allowed to Use a Password.
-			$blocked = (bool) array_diff( $user->roles, (array) $this->settings->password_login_roles );
-		}
-
-		if ( ! $blocked ) {
+		if ( ! $this->is_password_login_blocked( $user ) ) {
 			return $user;
 		}
 
+		return new WP_Error( 'password-login-blocked', $this->get_password_login_blocked_message() );
+	}
+
+	/**
+	 * Block password resets for users who must log in with OpenID Connect.
+	 *
+	 * Stops reset emails being sent for a password the user can't log in with.
+	 *
+	 * @param bool|WP_Error $allow   Whether the password can be reset.
+	 * @param int           $user_id The ID of the user resetting their password.
+	 *
+	 * @return bool|WP_Error
+	 */
+	public function block_password_reset( $allow, $user_id ) {
+		$user = get_userdata( $user_id );
+		if ( true !== $allow || ! $user instanceof WP_User || ! $this->is_password_login_blocked( $user ) ) {
+			return $allow;
+		}
+
+		return new WP_Error( 'password-reset-blocked', $this->get_password_login_blocked_message() );
+	}
+
+	/**
+	 * Whether the Password Login setting blocks this user from using a password.
+	 *
+	 * @param WP_User $user The user.
+	 *
+	 * @return bool
+	 */
+	private function is_password_login_blocked( WP_User $user ) {
+		if ( 'linked' === $this->settings->password_login ) {
+			return (bool) get_user_option( 'openid-connect-generic-subject-identity', $user->ID );
+		}
+
+		$allowed_roles = (array) $this->settings->password_login_roles;
+
+		// A user with no role on this site, for example a multisite super admin, is blocked unless ticked.
+		if ( empty( $user->roles ) ) {
+			return ! in_array( self::NO_ROLE, $allowed_roles, true );
+		}
+
+		// Any role not ticked under Roles Allowed to Use a Password.
+		return (bool) array_diff( $user->roles, $allowed_roles );
+	}
+
+	/**
+	 * The message shown to users whose password login or password reset is blocked.
+	 *
+	 * @return string
+	 */
+	private function get_password_login_blocked_message() {
 		$button_text = apply_filters( 'openid-connect-generic-login-button-text', $this->get_login_button_text() );
 
-		return new WP_Error(
-			'password-login-blocked',
-			// translators: %s is the text of the OpenID Connect login button.
-			sprintf( __( 'Please log in with the "%s" button.', 'daggerhart-openid-connect-generic' ), esc_html( $button_text ) )
-		);
+		// translators: %s is the text of the OpenID Connect login button.
+		return sprintf( __( 'Please log in with the "%s" button.', 'daggerhart-openid-connect-generic' ), esc_html( $button_text ) );
 	}
 
 	/**
@@ -253,7 +304,9 @@ class OpenID_Connect_Generic_Login_Form {
 		}
 
 		// Login button is appended to existing messages in case of error.
-		$message .= $this->make_login_button();
+		if ( 'shortcode' !== $this->settings->login_type ) {
+			$message .= $this->make_login_button();
+		}
 
 		return $message;
 	}
@@ -346,6 +399,21 @@ HTML;
 	}
 
 	/**
+	 * Print the CSS that draws the login button icon in the button's text colour.
+	 *
+	 * @return void
+	 */
+	public function print_icon_styles() {
+		// esc_url_raw() removes quotes and angle brackets, so the URL cannot break out of the CSS.
+		$icon_url = esc_url_raw( $this->settings->login_button_icon );
+		if ( ! $this->icon_used || empty( $icon_url ) ) {
+			return;
+		}
+		$mask = 'url("' . $icon_url . '") center/contain no-repeat';
+		echo '<style id="openid-connect-login-button-icon">.openid-connect-login-button-icon{display:inline-block;width:1.6em;height:1.6em;margin-right:0.5em;vertical-align:middle;background-color:currentColor;-webkit-mask:' . $mask . ';mask:' . $mask . '}</style>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
 	 * Print the login button with an "or" divider between it and the login form.
 	 *
 	 * Used on the WooCommerce My Account and checkout login forms, and returns the user to
@@ -375,21 +443,6 @@ HTML;
 			return;
 		}
 		echo '<style id="openid-connect-login-divider">.openid-connect-login-divider{display:flex;align-items:center;gap:0.75em;margin:1.25em 0;color:#767676;font-size:0.9em}.openid-connect-login-divider::before,.openid-connect-login-divider::after{content:"";flex:1;border-top:1px solid #ddd}</style>';
-	}
-
-	/**
-	 * Print the CSS that draws the login button icon in the button's text colour.
-	 *
-	 * @return void
-	 */
-	public function print_icon_styles() {
-		// esc_url_raw() removes quotes and angle brackets, so the URL cannot break out of the CSS.
-		$icon_url = esc_url_raw( $this->settings->login_button_icon );
-		if ( ! $this->icon_used || empty( $icon_url ) ) {
-			return;
-		}
-		$mask = 'url("' . $icon_url . '") center/contain no-repeat';
-		echo '<style id="openid-connect-login-button-icon">.openid-connect-login-button-icon{display:inline-block;width:1.6em;height:1.6em;margin-right:0.5em;vertical-align:middle;background-color:currentColor;-webkit-mask:' . $mask . ';mask:' . $mask . '}</style>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
 	/**

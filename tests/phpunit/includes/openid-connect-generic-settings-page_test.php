@@ -353,6 +353,33 @@ class OpenID_Connect_Generic_Settings_Page_Test extends WP_UnitTestCase {
 		// Unticked checkboxes are not submitted at all.
 		$saved = $settings_page->sanitize_settings( array() );
 		$this->assertSame( array(), $saved['password_login_roles'] );
+
+		$saved = $settings_page->sanitize_settings( array( 'password_login_roles' => array( OpenID_Connect_Generic_Login_Form::NO_ROLE ) ) );
+		$this->assertSame( array( OpenID_Connect_Generic_Login_Form::NO_ROLE ), $saved['password_login_roles'] );
+	}
+
+	/**
+	 * Test that the roles checkboxes are grouped in a fieldset and include users with no role.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_do_checkboxes_renders_roles_in_a_fieldset() {
+		$settings_page = $this->create_settings_page();
+		$fields        = $this->call_private_method( $settings_page, 'get_settings_fields' );
+		$field         = $fields['password_login_roles'];
+		$field['key']  = 'password_login_roles';
+		$field['name'] = 'openid_connect_generic_settings[password_login_roles]';
+
+		ob_start();
+		$settings_page->do_checkboxes( $field );
+		$output = ob_get_clean();
+
+		$this->assertMatchesRegularExpression( '/<fieldset>\s*<legend class="screen-reader-text"><span>Roles Allowed to Use a Password<\/span><\/legend>/', $output );
+		$this->assertStringContainsString( 'name="openid_connect_generic_settings[password_login_roles][]"', $output );
+		$this->assertStringContainsString( 'value="editor"', $output );
+		$this->assertStringContainsString( 'Editor', $output );
+		$this->assertStringContainsString( 'value="' . OpenID_Connect_Generic_Login_Form::NO_ROLE . '"', $output );
+		$this->assertStringContainsString( 'Users with no role', $output );
 	}
 
 	/**

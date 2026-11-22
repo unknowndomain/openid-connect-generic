@@ -162,6 +162,34 @@ class OpenID_Connect_Generic_JWT_Validator {
 	}
 
 	/**
+	 * Check a token's issuer against the expected issuer.
+	 *
+	 * An expected issuer containing `{tenantid}` (Microsoft Entra multitenant
+	 * discovery documents) matches when the placeholder is replaced with the
+	 * token's `tid` claim, which must be a GUID.
+	 *
+	 * @param mixed  $iss             The token's iss claim.
+	 * @param string $expected_issuer The expected issuer.
+	 * @param mixed  $tid             The token's tid claim, if any.
+	 *
+	 * @return bool
+	 */
+	public static function issuer_matches( $iss, $expected_issuer, $tid = null ) {
+		if ( ! is_string( $iss ) || ! is_string( $expected_issuer ) ) {
+			return false;
+		}
+
+		if ( false !== strpos( $expected_issuer, '{tenantid}' ) ) {
+			if ( ! is_string( $tid ) || ! preg_match( '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $tid ) ) {
+				return false;
+			}
+			$expected_issuer = str_replace( '{tenantid}', $tid, $expected_issuer );
+		}
+
+		return rtrim( $iss, '/' ) === rtrim( $expected_issuer, '/' );
+	}
+
+	/**
 	 * Validate JWT claims.
 	 *
 	 * @param object $decoded_jwt The decoded JWT payload.
@@ -228,7 +256,8 @@ class OpenID_Connect_Generic_JWT_Validator {
 				);
 			}
 
-			if ( rtrim( $decoded_jwt->iss, '/' ) !== rtrim( $this->issuer, '/' ) ) {
+			$tid = isset( $decoded_jwt->tid ) ? $decoded_jwt->tid : null;
+			if ( ! self::issuer_matches( $decoded_jwt->iss, $this->issuer, $tid ) ) {
 				$this->logger->log(
 					sprintf(
 						'Issuer mismatch - Expected: "%s", Received: "%s". Configure the correct issuer in Settings > OpenID Connect Client > Issuer field, or via the OIDC_ISSUER constant.',
@@ -271,9 +300,13 @@ class OpenID_Connect_Generic_JWT_Validator {
 	 * Enrich JWKS with algorithm from JWT header if missing.
 	 *
 	 * Some identity providers (like Microsoft Entra ID) return JWKs without
-	 * the "alg" parameter. This method adds the algorithm from the JWT header
-	 * to each key that's missing it, ensuring compatibility with the Firebase
-	 * JWT library which requires "alg" to be present.
+	 * the "alg" parameter. This method adds an algorithm to each key that's
+	 * missing it, ensuring compatibility with the Firebase JWT library which
+	 * requires "alg" to be present.
+	 *
+	 * The JWT header's algorithm is only used when it fits the key type, so a
+	 * token can't choose an HMAC algorithm and use a public key as the secret.
+	 * Keys of other types without an "alg" are left out.
 	 *
 	 * @param array  $jwks      The JWKS array with keys.
 	 * @param string $id_token  The JWT ID token.
@@ -284,21 +317,54 @@ class OpenID_Connect_Generic_JWT_Validator {
 		// Extract algorithm from JWT header.
 		$jwt_alg = $this->get_jwt_header_alg( $id_token );
 
-		// If we couldn't extract the algorithm, default to RS256 (most common for OIDC).
-		if ( empty( $jwt_alg ) ) {
-			$jwt_alg = 'RS256';
+		if ( ! isset( $jwks['keys'] ) || ! is_array( $jwks['keys'] ) ) {
+			return $jwks;
 		}
 
-		// Add algorithm to keys that are missing it.
-		if ( isset( $jwks['keys'] ) && is_array( $jwks['keys'] ) ) {
-			foreach ( $jwks['keys'] as &$key ) {
-				if ( ! isset( $key['alg'] ) ) {
-					$key['alg'] = $jwt_alg;
-				}
+		foreach ( $jwks['keys'] as $index => $key ) {
+			if ( ! is_array( $key ) || isset( $key['alg'] ) ) {
+				continue;
 			}
+
+			$algs = $this->get_algs_for_key( $key );
+			if ( empty( $algs ) ) {
+				unset( $jwks['keys'][ $index ] );
+				continue;
+			}
+
+			// Use the JWT header's algorithm if it fits this key, otherwise the key type's default.
+			$jwks['keys'][ $index ]['alg'] = in_array( $jwt_alg, $algs, true ) ? $jwt_alg : $algs[0];
 		}
+		$jwks['keys'] = array_values( $jwks['keys'] );
 
 		return $jwks;
+	}
+
+	/**
+	 * The signature algorithms that can be used with a JWK, by its key type, default first.
+	 *
+	 * @param array $key The JWK.
+	 *
+	 * @return string[] The algorithms, or an empty array for unsupported key types.
+	 */
+	private function get_algs_for_key( $key ) {
+		switch ( $key['kty'] ?? '' ) {
+			case 'RSA':
+				return array( 'RS256', 'RS384', 'RS512' );
+
+			case 'EC':
+				$curve_algs = array(
+					'P-256' => 'ES256',
+					'P-384' => 'ES384',
+				);
+				return isset( $curve_algs[ $key['crv'] ?? '' ] ) ? array( $curve_algs[ $key['crv'] ] ) : array();
+
+			case 'OKP':
+				return array( 'EdDSA' );
+
+			default:
+				return array();
+		}
 	}
 
 	/**
@@ -370,11 +436,20 @@ class OpenID_Connect_Generic_JWT_Validator {
 			return new WP_Error( 'missing-sub-and-sid', __( 'Logout token missing both subject and session ID claims.', 'daggerhart-openid-connect-generic' ) );
 		}
 
+		// Like ID tokens, the sub must be a string or an integer.
+		if ( isset( $decoded_jwt->sub ) && ! is_string( $decoded_jwt->sub ) && ! is_int( $decoded_jwt->sub ) ) {
+			return new WP_Error( 'invalid-sub', __( 'Logout token subject claim must be a string or integer.', 'daggerhart-openid-connect-generic' ) );
+		}
+
+		if ( isset( $decoded_jwt->sid ) && ! is_string( $decoded_jwt->sid ) ) {
+			return new WP_Error( 'invalid-sid', __( 'Logout token session ID claim must be a string.', 'daggerhart-openid-connect-generic' ) );
+		}
+
 		if ( isset( $decoded_jwt->nonce ) ) {
 			return new WP_Error( 'unexpected-nonce', __( 'Logout token must not contain a nonce claim.', 'daggerhart-openid-connect-generic' ) );
 		}
 
-		if ( empty( $decoded_jwt->jti ) ) {
+		if ( empty( $decoded_jwt->jti ) || ! is_string( $decoded_jwt->jti ) ) {
 			return new WP_Error( 'missing-jti', __( 'Logout token missing JWT ID claim.', 'daggerhart-openid-connect-generic' ) );
 		}
 
