@@ -63,6 +63,10 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 			public function __set( $key, $value ) {
 				$this->values[ $key ] = $value;
 			}
+
+			public function __isset( $key ) {
+				return isset( $this->values[ $key ] );
+			}
 		};
 	}
 
@@ -581,11 +585,11 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Test that failed logins and Application Passwords are passed through unchanged.
+	 * Test that failed logins are passed through unchanged.
 	 *
 	 * @group LoginFormTests
 	 */
-	public function test_password_login_passes_through_errors_and_application_passwords() {
+	public function test_password_login_passes_through_errors() {
 		$login_form = $this->create_login_form(
 			array(
 				'password_login'       => 'roles',
@@ -593,13 +597,89 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 			)
 		);
 		$error      = new WP_Error( 'incorrect_password', 'Wrong password.' );
-		$admin      = self::factory()->user->create_and_get( array( 'role' => 'administrator' ) );
 
 		$this->assertSame( $error, $login_form->block_password_login( $error ) );
 		$this->assertNull( $login_form->block_password_login( null ) );
+	}
 
-		do_action( 'application_password_did_authenticate', $admin, array() );
-		$this->assertSame( $admin, $login_form->block_password_login( $admin ) );
+	/**
+	 * Register the login form with password logins blocked for every role but subscriber,
+	 * and allow Application Passwords on this request as if it were an API request.
+	 *
+	 * @return void
+	 */
+	private function register_password_login_with_application_passwords() {
+		add_filter( 'wp_is_application_passwords_available', '__return_true' );
+		add_filter( 'application_password_is_api_request', '__return_true' );
+
+		OpenID_Connect_Generic_Login_Form::register(
+			$this->create_settings_stub(
+				array(
+					'password_login'       => 'roles',
+					'password_login_roles' => array( 'subscriber' ),
+				)
+			),
+			$this->createMock( OpenID_Connect_Generic_Client_Wrapper::class ),
+			$this->createMock( OpenID_Connect_Generic_Client::class )
+		);
+	}
+
+	/**
+	 * Create a user with a known password and an Application Password.
+	 *
+	 * @param string $role The user's role.
+	 *
+	 * @return array The user, and their Application Password.
+	 */
+	private function create_user_with_application_password( $role ) {
+		$user = self::factory()->user->create_and_get(
+			array(
+				'role'      => $role,
+				'user_pass' => 'real-password',
+			)
+		);
+
+		list( $application_password ) = WP_Application_Passwords::create_new_application_password( $user->ID, array( 'name' => 'Test' ) );
+
+		return array( $user, $application_password );
+	}
+
+	/**
+	 * Test that a blocked user can still use their own Application Password.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_password_login_allows_application_passwords() {
+		$this->register_password_login_with_application_passwords();
+		list( $admin, $application_password ) = $this->create_user_with_application_password( 'administrator' );
+
+		$this->assertWPError( wp_authenticate( $admin->user_login, 'real-password' ) );
+
+		$result = wp_authenticate( $admin->user_login, $application_password );
+		$this->assertInstanceOf( WP_User::class, $result );
+		$this->assertSame( $admin->ID, $result->ID );
+	}
+
+	/**
+	 * Test that one user's Application Password login doesn't let a later password login
+	 * in the same request skip the block, as with XML-RPC system.multicall.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_password_login_application_password_exemption_is_per_login() {
+		$this->register_password_login_with_application_passwords();
+		list( $subscriber, $subscriber_application_password ) = $this->create_user_with_application_password( 'subscriber' );
+		list( $admin, $admin_application_password )           = $this->create_user_with_application_password( 'administrator' );
+
+		// Another user's Application Password login first.
+		$this->assertInstanceOf( WP_User::class, wp_authenticate( $subscriber->user_login, $subscriber_application_password ) );
+		$result = wp_authenticate( $admin->user_login, 'real-password' );
+		$this->assertWPError( $result );
+		$this->assertSame( 'password-login-blocked', $result->get_error_code() );
+
+		// The blocked user's own Application Password login first.
+		$this->assertInstanceOf( WP_User::class, wp_authenticate( $admin->user_login, $admin_application_password ) );
+		$this->assertWPError( wp_authenticate( $admin->user_login, 'real-password' ) );
 	}
 
 	/**

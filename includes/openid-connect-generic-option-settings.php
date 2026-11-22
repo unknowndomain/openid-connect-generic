@@ -139,7 +139,8 @@ class OpenID_Connect_Generic_Option_Settings {
 		}
 
 		if ( $granular_defaults ) {
-			$this->values = array_replace_recursive( $this->default_settings, $this->values );
+			// A saved list replaces its default list rather than being merged into it by position.
+			$this->values = array_replace( $this->default_settings, $this->values );
 		}
 	}
 

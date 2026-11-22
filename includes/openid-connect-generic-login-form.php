@@ -55,6 +55,13 @@ class OpenID_Connect_Generic_Login_Form {
 	private $divider_used = false;
 
 	/**
+	 * The ID of the user the current login authenticated with an Application Password.
+	 *
+	 * @var int
+	 */
+	private $application_password_user_id = 0;
+
+	/**
 	 * The class constructor.
 	 *
 	 * @param OpenID_Connect_Generic_Option_Settings $settings       A plugin settings object instance.
@@ -100,6 +107,8 @@ class OpenID_Connect_Generic_Login_Form {
 
 		// Block password logins for the users set by the Password Login setting.
 		if ( ! empty( $settings->password_login ) ) {
+			add_filter( 'authenticate', array( $login_form, 'start_password_login_check' ), PHP_INT_MIN );
+			add_action( 'application_password_did_authenticate', array( $login_form, 'record_application_password_login' ) );
 			add_filter( 'authenticate', array( $login_form, 'block_password_login' ), 30 );
 		}
 
@@ -168,18 +177,44 @@ class OpenID_Connect_Generic_Login_Form {
 	}
 
 	/**
+	 * Forget any earlier Application Password login when a new login starts.
+	 *
+	 * A request can log in more than once, for example with XML-RPC system.multicall,
+	 * so an Application Password login must only count for the login it happened in.
+	 *
+	 * @param WP_User|WP_Error|null $user The result of the earlier authentication checks.
+	 *
+	 * @return WP_User|WP_Error|null
+	 */
+	public function start_password_login_check( $user ) {
+		$this->application_password_user_id = 0;
+		return $user;
+	}
+
+	/**
+	 * Record the user the current login authenticated with an Application Password.
+	 *
+	 * @param WP_User $user The user who authenticated.
+	 *
+	 * @return void
+	 */
+	public function record_application_password_login( $user ) {
+		$this->application_password_user_id = $user instanceof WP_User ? $user->ID : 0;
+	}
+
+	/**
 	 * Block password logins for users who must log in with OpenID Connect.
 	 *
 	 * Runs after WordPress has checked the password, so a wrong password still gets the
 	 * normal error and nothing reveals which users must use OpenID Connect. OpenID Connect
-	 * logins don't use this filter, and Application Passwords are still allowed.
+	 * logins don't use this filter, and a user's own Application Passwords are still allowed.
 	 *
 	 * @param WP_User|WP_Error|null $user The result of the earlier authentication checks.
 	 *
 	 * @return WP_User|WP_Error|null
 	 */
 	public function block_password_login( $user ) {
-		if ( ! $user instanceof WP_User || did_action( 'application_password_did_authenticate' ) ) {
+		if ( ! $user instanceof WP_User || $user->ID === $this->application_password_user_id ) {
 			return $user;
 		}
 

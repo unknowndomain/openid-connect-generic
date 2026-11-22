@@ -339,4 +339,37 @@ class OpenID_Connect_Generic_Settings_Page_Test extends WP_UnitTestCase {
 		return new OpenID_Connect_Generic_Settings_Page( $settings, $logger );
 	}
 
+	/**
+	 * Test that ticked roles are saved, unknown values are dropped, and no ticks saves none.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_sanitize_settings_saves_ticked_roles() {
+		$settings_page = $this->create_settings_page();
+
+		$saved = $settings_page->sanitize_settings( array( 'password_login_roles' => array( 'editor', 'not-a-role' ) ) );
+		$this->assertSame( array( 'editor' ), $saved['password_login_roles'] );
+
+		// Unticked checkboxes are not submitted at all.
+		$saved = $settings_page->sanitize_settings( array() );
+		$this->assertSame( array(), $saved['password_login_roles'] );
+	}
+
+	/**
+	 * Test that the roles saved on the settings page are the roles loaded back.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_saved_roles_load_back_unchanged() {
+		$defaults = array( 'password_login_roles' => array( 'subscriber', 'customer' ) );
+
+		foreach ( array( array( 'editor' ), array(), array( 'administrator', 'subscriber' ) ) as $ticked ) {
+			$saved = $this->create_settings_page()->sanitize_settings( array( 'password_login_roles' => $ticked ) );
+			update_option( OpenID_Connect_Generic_Option_Settings::OPTION_NAME, $saved );
+
+			$settings = new OpenID_Connect_Generic_Option_Settings( $defaults );
+			$this->assertSame( $ticked, $settings->password_login_roles );
+		}
+	}
+
 }
