@@ -3,6 +3,18 @@
 **3.12.0**
 
 * Requirements: Minimum PHP raised to 8.2 and minimum WordPress to 6.7. Tested up to WordPress 7.1.
+* Fix: Microsoft Entra ID multitenant apps failed issuer validation. Set the Issuer to `https://login.microsoftonline.com/{tenantid}/v2.0`, and `{tenantid}` is replaced with each token's tenant ID (#682).
+* Fix: Logins failed with "Incorrect user claim" when the IDP sent the userinfo `sub` as a number and the ID token `sub` as a string. A missing or empty `sub` is now rejected (#673).
+* Fix: The token request no longer sends `scope`, which some identity providers, such as OpenIddict, reject. Providers that need it can add it back with the `openid-connect-generic-alter-request` filter (#497).
+* Fix: Sites that install the plugin with Composer had a fatal error on load since 3.11.0, because the plugin required its own `vendor/autoload.php`. It now uses the project's autoloader when its own `vendor/` folder is missing, and shows an admin notice instead of a fatal error if its dependencies can't be found.
+* Fix: With Alternate Redirect URI enabled, sites with WordPress in a subdirectory (such as Bedrock) sent a callback URL under the WordPress directory, which returned a 404. The callback URL is now relative to the site's home URL (#666). Affected sites see an admin notice with the old and new redirect URIs after updating.
+* Feature: New `openid-connect-generic-redirect-uri` filter to change the redirect URI sent to the identity provider.
+* Feature: New Shortcode Only login type, which leaves the login button off the login page while the `[openid_connect_generic_login_button]` shortcode still works (#621).
+
+**3.11.5**
+
+* Fix: Logins failed with "Invalid state" on hosts that only pass WordPress-style cookie names to PHP, such as Pantheon. The login cookie is now named `wp-openid_connect_generic_browser`, and the new `openid-connect-generic-browser-cookie-name` filter can change it.
+* Improvement: When logging is enabled, a failed state check logs which part of the check failed.
 
 **3.11.4**
 

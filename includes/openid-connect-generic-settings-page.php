@@ -232,8 +232,9 @@ class OpenID_Connect_Generic_Settings_Page {
 				'description' => __( 'Select how the client (login form) should provide login options.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'select',
 				'options'     => array(
-					'button' => __( 'OpenID Connect button on login form', 'daggerhart-openid-connect-generic' ),
-					'auto'   => __( 'Auto Login - SSO', 'daggerhart-openid-connect-generic' ),
+					'button'    => __( 'OpenID Connect button on login form', 'daggerhart-openid-connect-generic' ),
+					'auto'      => __( 'Auto Login - SSO', 'daggerhart-openid-connect-generic' ),
+					'shortcode' => __( 'Shortcode Only', 'daggerhart-openid-connect-generic' ),
 				),
 				'disabled'    => defined( 'OIDC_LOGIN_TYPE' ),
 				'section'     => 'client_settings',
@@ -242,6 +243,13 @@ class OpenID_Connect_Generic_Settings_Page {
 				'title'       => __( 'Login Button Text', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'Customize the text shown on the OpenID Connect login button. Leave empty to use the default text.', 'daggerhart-openid-connect-generic' ),
 				'example'     => 'Login with Single Sign-On',
+				'type'        => 'text',
+				'section'     => 'client_settings',
+			),
+			'login_button_icon' => array(
+				'title'       => __( 'Login Button Icon', 'daggerhart-openid-connect-generic' ),
+				'description' => __( 'URL of a PNG or SVG with a transparent background, shown before the text on the OpenID Connect login button. The icon is drawn in the button\'s text colour. Leave empty for no icon.', 'daggerhart-openid-connect-generic' ),
+				'example'     => 'https://example.com/wp-content/uploads/sso-icon.svg',
 				'type'        => 'text',
 				'section'     => 'client_settings',
 			),
@@ -322,7 +330,7 @@ class OpenID_Connect_Generic_Settings_Page {
 			),
 			'issuer' => array(
 				'title'       => __( 'Issuer', 'daggerhart-openid-connect-generic' ),
-				'description' => __( 'Identity provider issuer URL for JWT validation. If not set, the issuer will be automatically derived from the Login Endpoint URL. Only configure this if your IDP uses a different issuer than the base URL of the login endpoint.', 'daggerhart-openid-connect-generic' ),
+				'description' => __( 'Identity provider issuer URL for JWT validation. If not set, the issuer will be automatically derived from the Login Endpoint URL. Only configure this if your IDP uses a different issuer than the base URL of the login endpoint. For Microsoft Entra ID multitenant apps, use https://login.microsoftonline.com/{tenantid}/v2.0: {tenantid} is replaced with the tenant ID from each token.', 'daggerhart-openid-connect-generic' ),
 				'example'     => 'https://example.com',
 				'type'        => 'text',
 				'disabled'    => defined( 'OIDC_ISSUER' ),
@@ -517,11 +525,10 @@ class OpenID_Connect_Generic_Settings_Page {
 
 		wp_enqueue_style( 'daggerhart-openid-connect-generic-admin', plugin_dir_url( __DIR__ ) . 'css/styles-admin.css', array(), OpenID_Connect_Generic::VERSION, 'all' );
 
-		$redirect_uri = admin_url( 'admin-ajax.php?action=openid-connect-authorize' );
+		$plugin = OpenID_Connect_Generic::instance();
 
-		if ( $this->settings->alternate_redirect_uri ) {
-			$redirect_uri = site_url( '/openid-connect-authorize' );
-		}
+		$redirect_uri = $plugin->get_redirect_uri( $this->settings );
+
 		?>
 		<div class="wrap">
 			<h2><?php print esc_html( get_admin_page_title() ); ?></h2>

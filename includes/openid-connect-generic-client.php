@@ -128,11 +128,13 @@ class OpenID_Connect_Generic_Client {
 	private $state_time_limit = 180;
 
 	/**
-	 * Cookie that identifies the browser that started a login.
+	 * Default name of the cookie that identifies the browser that started a login.
+	 *
+	 * Managed hosts such as Pantheon only pass cookies with WordPress-style names to PHP.
 	 *
 	 * @var string
 	 */
-	const BROWSER_COOKIE = 'openid-connect-generic-browser';
+	const BROWSER_COOKIE = 'wp-openid_connect_generic_browser';
 
 	/**
 	 * Allow HTTP requests to internal/private network endpoints.
@@ -242,6 +244,15 @@ class OpenID_Connect_Generic_Client {
 	}
 
 	/**
+	 * Provide the configured scope requested from the IDP.
+	 *
+	 * @return string
+	 */
+	public function get_scope() {
+		return $this->scope;
+	}
+
+	/**
 	 * Validate the request for login authentication
 	 *
 	 * @param array<string> $request The authentication request results.
@@ -320,7 +331,6 @@ class OpenID_Connect_Generic_Client {
 				'client_secret' => $this->client_secret,
 				'redirect_uri'  => $this->redirect_uri,
 				'grant_type'    => 'authorization_code',
-				'scope'         => $this->scope,
 			),
 			'headers' => array( 'Host' => $host ),
 		);
@@ -501,6 +511,7 @@ class OpenID_Connect_Generic_Client {
 
 		if ( ! is_string( $state ) || ! preg_match( '/^[a-f0-9]{32}$/', $state ) ) {
 			do_action( 'openid-connect-generic-state-not-found', $state );
+			$this->logger->log( 'State is malformed.', 'invalid-state' );
 			return false;
 		}
 
@@ -518,14 +529,25 @@ class OpenID_Connect_Generic_Client {
 		}
 
 		if ( ! $valid ) {
+			$this->logger->log( 'State not found or expired.', 'invalid-state' );
 			return false;
 		}
 
 		// The state must come back to the browser that started the login, and only once.
 		$binding = get_transient( 'openid-connect-generic-state--' . $state . '--browser' );
 		$browser_id = $this->get_browser_id();
-		if ( empty( $binding ) || empty( $browser_id ) || ! hash_equals( $binding, $this->hash_browser_id( $browser_id ) ) ) {
+		$reason = '';
+		if ( empty( $binding ) ) {
+			$reason = 'State is not linked to a browser.';
+		} elseif ( empty( $browser_id ) ) {
+			$reason = 'Browser cookie missing from the request.';
+		} elseif ( ! hash_equals( $binding, $this->hash_browser_id( $browser_id ) ) ) {
+			$reason = 'Browser cookie does not match the state.';
+		}
+
+		if ( ! empty( $reason ) ) {
 			do_action( 'openid-connect-generic-state-not-found', $state );
+			$this->logger->log( $reason, 'invalid-state' );
 			return false;
 		}
 
@@ -677,16 +699,33 @@ class OpenID_Connect_Generic_Client {
 	}
 
 	/**
+	 * Get the name of the browser cookie.
+	 *
+	 * @return string
+	 */
+	public function get_browser_cookie_name() {
+		/**
+		 * Filters the name of the cookie that identifies the browser that started a login.
+		 *
+		 * @param string $name The cookie name.
+		 */
+		$name = apply_filters( 'openid-connect-generic-browser-cookie-name', self::BROWSER_COOKIE );
+
+		return is_string( $name ) && preg_match( '/^[A-Za-z0-9_-]+$/', $name ) ? $name : self::BROWSER_COOKIE;
+	}
+
+	/**
 	 * Get the browser identifier from the browser cookie.
 	 *
 	 * @return string Empty when the cookie is missing or malformed.
 	 */
 	public function get_browser_id() {
-		if ( empty( $_COOKIE[ self::BROWSER_COOKIE ] ) || ! is_string( $_COOKIE[ self::BROWSER_COOKIE ] ) ) {
+		$name = $this->get_browser_cookie_name();
+		if ( empty( $_COOKIE[ $name ] ) || ! is_string( $_COOKIE[ $name ] ) ) {
 			return '';
 		}
 
-		$browser_id = sanitize_text_field( wp_unslash( $_COOKIE[ self::BROWSER_COOKIE ] ) );
+		$browser_id = sanitize_text_field( wp_unslash( $_COOKIE[ $name ] ) );
 
 		return preg_match( '/^[a-f0-9]{32}$/', $browser_id ) ? $browser_id : '';
 	}
@@ -708,7 +747,7 @@ class OpenID_Connect_Generic_Client {
 
 		$browser_id = bin2hex( random_bytes( 16 ) );
 		$this->send_browser_cookie( $browser_id );
-		$_COOKIE[ self::BROWSER_COOKIE ] = $browser_id;
+		$_COOKIE[ $this->get_browser_cookie_name() ] = $browser_id;
 
 		return $browser_id;
 	}
@@ -731,7 +770,7 @@ class OpenID_Connect_Generic_Client {
 	 */
 	protected function send_browser_cookie( $browser_id ) {
 		setcookie(
-			self::BROWSER_COOKIE,
+			$this->get_browser_cookie_name(),
 			$browser_id,
 			array(
 				'expires'  => 0,
@@ -949,7 +988,8 @@ class OpenID_Connect_Generic_Client {
 				return new WP_Error( 'missing-iss', __( 'Token missing issuer claim.', 'daggerhart-openid-connect-generic' ), $id_token_claim );
 			}
 
-			if ( rtrim( $id_token_claim['iss'], '/' ) !== rtrim( $expected_issuer, '/' ) ) {
+			$tid = isset( $id_token_claim['tid'] ) ? $id_token_claim['tid'] : null;
+			if ( ! OpenID_Connect_Generic_JWT_Validator::issuer_matches( $id_token_claim['iss'], $expected_issuer, $tid ) ) {
 				$this->logger->log(
 					sprintf(
 						'Issuer mismatch - Expected: "%s", Received: "%s". Configure the correct issuer in Settings > OpenID Connect Client > Issuer field, or via the OIDC_ISSUER constant.',
@@ -1024,7 +1064,8 @@ class OpenID_Connect_Generic_Client {
 		}
 
 		// Make sure the id_token sub equals the user_claim sub, according to spec.
-		if ( $id_token_claim['sub'] !== $user_claim['sub'] ) {
+		$id_token_sub = $this->get_sub_as_string( $id_token_claim );
+		if ( '' === $id_token_sub || $id_token_sub !== $this->get_sub_as_string( $user_claim ) ) {
 			return new WP_Error( 'incorrect-user-claim', __( 'Incorrect user claim.', 'daggerhart-openid-connect-generic' ), func_get_args() );
 		}
 
@@ -1036,6 +1077,28 @@ class OpenID_Connect_Generic_Client {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Get a claim set's sub as a string.
+	 *
+	 * Some IDPs send a numeric sub as an integer in one response and a string
+	 * in another. Any other type counts as missing.
+	 *
+	 * @param mixed $claim The claim set.
+	 *
+	 * @return string The sub, or an empty string if it is missing or not a string or integer.
+	 */
+	private function get_sub_as_string( $claim ) {
+		if ( ! is_array( $claim ) || ! isset( $claim['sub'] ) ) {
+			return '';
+		}
+
+		if ( is_int( $claim['sub'] ) ) {
+			return (string) $claim['sub'];
+		}
+
+		return is_string( $claim['sub'] ) ? $claim['sub'] : '';
 	}
 
 	/**

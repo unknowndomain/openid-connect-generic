@@ -3,7 +3,7 @@
 **Tags:** security, login, oauth2, openidconnect, apps, authentication, autologin, sso  
 **Requires at least:** 6.7  
 **Tested up to:** 7.1  
-**Stable tag:** 3.11.4  
+**Stable tag:** 3.11.5  
 **Requires PHP:** 8.2  
 **License:** GPLv2 or later  
 **License URI:** http://www.gnu.org/licenses/gpl-2.0.html  
@@ -23,13 +23,19 @@ Please submit issues to the Github repo: https://github.com/oidc-wp/openid-conne
 
 ## Installation ##
 
-1. Install the plugin from Plugins > Add New, or upload it to the `/wp-content/plugins/` directory
-1. Activate the plugin
-1. Visit Settings > OpenID Connect and configure to meet your needs
+1. In WordPress, go to Plugins > Add New, search for "OpenID Connect Generic", then install and activate it.
+1. Go to Settings > OpenID Connect Client and configure it for your identity provider.
+
+To install manually, download the zip from https://wordpress.org/plugins/daggerhart-openid-connect-generic/ and upload it under Plugins > Add New > Upload Plugin. Don't use GitHub's "Download ZIP": it doesn't include the plugin's dependencies.
+
+### Installing with Composer ###
+
+* WPackagist: `composer require wpackagist-plugin/daggerhart-openid-connect-generic` installs the WordPress.org package.
+* Packagist: `composer require daggerhart/openid-connect-generic` installs the dependencies in your project's `vendor/` folder, so your site must load the project's `vendor/autoload.php` (Bedrock does). Supported from 3.12.0.
 
 ### Installing from source ###
 
-The source code on GitHub, including its "Download ZIP" button, doesn't include the `vendor/` folder. Run `composer install --no-dev` in the plugin folder before activating it.
+Clone the repository and run `composer install --no-dev` in the plugin folder before activating it.
 
 ## Frequently Asked Questions ##
 
@@ -55,7 +61,11 @@ On the settings page for this plugin (Dashboard > Settings > OpenID Connect Gene
 
 ### 3.12.0 ###
 
-Requires PHP 8.2 and WordPress 6.7 or later. Check your server's PHP version before updating.
+Requires PHP 8.2 and WordPress 6.7 or later. Check your server's PHP version before updating. If Alternate Redirect URI is enabled and WordPress is installed in a subdirectory, the redirect URI changes to your site address. An admin notice shows the old and new URIs: allow the new one at your identity provider.
+
+### 3.11.5 ###
+
+Fixes logins failing with "Invalid state" on Pantheon and some other managed hosts after updating to 3.11.4.
 
 ### 3.11.4 ###
 
@@ -70,6 +80,18 @@ SECURITY UPDATE: 3.11.x branch - Fixes authentication vulnerabilities including 
 ### 3.12.0 ###
 
 * Requirements: Minimum PHP raised to 8.2 and minimum WordPress to 6.7. Tested up to WordPress 7.1.
+* Fix: Microsoft Entra ID multitenant apps failed issuer validation. Set the Issuer to `https://login.microsoftonline.com/{tenantid}/v2.0`, and `{tenantid}` is replaced with each token's tenant ID (#682).
+* Fix: Logins failed with "Incorrect user claim" when the IDP sent the userinfo `sub` as a number and the ID token `sub` as a string. A missing or empty `sub` is now rejected (#673).
+* Fix: The token request no longer sends `scope`, which some identity providers, such as OpenIddict, reject. Providers that need it can add it back with the `openid-connect-generic-alter-request` filter (#497).
+* Fix: Sites that install the plugin with Composer had a fatal error on load since 3.11.0, because the plugin required its own `vendor/autoload.php`. It now uses the project's autoloader when its own `vendor/` folder is missing, and shows an admin notice instead of a fatal error if its dependencies can't be found.
+* Fix: With Alternate Redirect URI enabled, sites with WordPress in a subdirectory (such as Bedrock) sent a callback URL under the WordPress directory, which returned a 404. The callback URL is now relative to the site's home URL (#666). Affected sites see an admin notice with the old and new redirect URIs after updating.
+* Feature: New `openid-connect-generic-redirect-uri` filter to change the redirect URI sent to the identity provider.
+* Feature: New Shortcode Only login type, which leaves the login button off the login page while the `[openid_connect_generic_login_button]` shortcode still works (#621).
+
+### 3.11.5 ###
+
+* Fix: Logins failed with "Invalid state" on hosts that only pass WordPress-style cookie names to PHP, such as Pantheon. The login cookie is now named `wp-openid_connect_generic_browser`, and the new `openid-connect-generic-browser-cookie-name` filter can change it.
+* Improvement: When logging is enabled, a failed state check logs which part of the check failed.
 
 ### 3.11.4 ###
 

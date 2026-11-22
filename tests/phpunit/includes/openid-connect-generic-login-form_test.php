@@ -318,6 +318,143 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Test that the button icon from settings is rendered before the text.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_button_icon_from_settings_renders_in_output() {
+		$settings = $this->create_settings_stub( array(
+			'login_button_icon' => 'https://site.example.com/icon.svg',
+		) );
+
+		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
+		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
+
+		$client_wrapper = $this->createMock( OpenID_Connect_Generic_Client_Wrapper::class );
+		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
+		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
+
+		// Only the plugin's footer output is under test; core's wp_footer callbacks emit deprecation notices.
+		remove_all_actions( 'wp_footer' );
+		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
+
+		$output = do_shortcode( '[openid_connect_generic_login_button button_text="Sign In"]' );
+
+		$this->assertMatchesRegularExpression( '/<a[^>]*><span class="openid-connect-login-button-icon" aria-hidden="true"><\/span>Sign In<\/a>/', $output );
+
+		ob_start();
+		do_action( 'wp_footer' );
+		$styles = ob_get_clean();
+
+		$this->assertStringContainsString( 'mask:url("https://site.example.com/icon.svg") center/contain no-repeat', $styles );
+		$this->assertStringContainsString( 'background-color:currentColor', $styles );
+	}
+
+	/**
+	 * Test that no icon is rendered when none is configured.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_no_button_icon_by_default() {
+		$settings = $this->create_settings_stub();
+
+		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
+		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
+
+		$client_wrapper = $this->createMock( OpenID_Connect_Generic_Client_Wrapper::class );
+		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
+		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
+
+		// Only the plugin's footer output is under test; core's wp_footer callbacks emit deprecation notices.
+		remove_all_actions( 'wp_footer' );
+		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
+
+		$output = do_shortcode( '[openid_connect_generic_login_button]' );
+
+		$this->assertStringNotContainsString( 'openid-connect-login-button-icon', $output );
+
+		ob_start();
+		do_action( 'wp_footer' );
+		$this->assertStringNotContainsString( 'openid-connect-login-button-icon', ob_get_clean() );
+	}
+
+	/**
+	 * Test that the button icon URL cannot break out of the CSS.
+	 *
+	 * @group LoginFormTests
+	 */
+	public function test_button_icon_url_escaping() {
+		$settings = $this->create_settings_stub( array(
+			'login_button_icon' => 'https://site.example.com/x.svg");}body{display:none',
+		) );
+
+		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
+		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
+
+		$client_wrapper = $this->createMock( OpenID_Connect_Generic_Client_Wrapper::class );
+		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
+		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
+
+		// Only the plugin's footer output is under test; core's wp_footer callbacks emit deprecation notices.
+		remove_all_actions( 'wp_footer' );
+		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
+
+		do_shortcode( '[openid_connect_generic_login_button]' );
+
+		ob_start();
+		do_action( 'wp_footer' );
+		$styles = ob_get_clean();
+
+		// Quotes are removed from the URL, so it cannot break out of the CSS url() value.
+		$this->assertStringNotContainsString( '");}', $styles );
+	}
+
+	/**
+	 * Test where the login button appears for each login type.
+	 *
+	 * @group LoginFormTests
+	 *
+	 * @dataProvider login_type_provider
+	 *
+	 * @param string $login_type        The login type setting.
+	 * @param bool   $button_on_login   Whether wp-login.php shows the button.
+	 */
+	public function test_login_type_controls_login_page_button( $login_type, $button_on_login ) {
+		$settings = $this->create_settings_stub( array( 'login_type' => $login_type ) );
+
+		$client = $this->createMock( OpenID_Connect_Generic_Client::class );
+		$client->method( 'get_redirect_uri' )->willReturn( 'https://site.example.com/callback' );
+
+		$client_wrapper = $this->createMock( OpenID_Connect_Generic_Client_Wrapper::class );
+		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
+		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
+
+		$login_form = new OpenID_Connect_Generic_Login_Form( $settings, $client_wrapper, $client );
+
+		$login_page = $login_form->handle_login_page( '' );
+		if ( $button_on_login ) {
+			$this->assertStringContainsString( 'openid-connect-login-button', $login_page );
+		} else {
+			$this->assertStringNotContainsString( 'openid-connect-login-button', $login_page );
+		}
+
+		// The shortcode button works for every login type.
+		$this->assertStringContainsString( 'openid-connect-login-button', $login_form->make_login_button() );
+	}
+
+	/**
+	 * Data provider for test_login_type_controls_login_page_button.
+	 *
+	 * @return array
+	 */
+	public function login_type_provider() {
+		return array(
+			'button'    => array( 'button', true ),
+			'shortcode' => array( 'shortcode', false ),
+		);
+	}
+
+	/**
 	 * Test that the login button is added to the top of the WooCommerce login form.
 	 *
 	 * @group LoginFormTests
@@ -362,6 +499,8 @@ class OpenID_Connect_Generic_Login_Form_Test extends WP_UnitTestCase {
 		$client_wrapper->method( 'get_redirect_to' )->willReturn( '' );
 		$client_wrapper->method( 'get_authentication_url' )->willReturn( 'https://idp.example.com/authorize' );
 
+		// Only the plugin's footer output is under test; core's wp_footer callbacks emit deprecation notices.
+		remove_all_actions( 'wp_footer' );
 		OpenID_Connect_Generic_Login_Form::register( $settings, $client_wrapper, $client );
 
 		ob_start();

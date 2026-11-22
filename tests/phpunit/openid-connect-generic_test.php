@@ -123,6 +123,119 @@ class OpenID_Connect_Generic_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Test the redirect URI with and without the alternate redirect URI setting.
+	 *
+	 * @group PluginTests
+	 */
+	public function test_plugin_redirect_uri_follows_home_url() {
+		// WordPress in a subdirectory, as on Bedrock installs.
+		update_option( 'siteurl', home_url( '/wp' ) );
+
+		$settings = new OpenID_Connect_Generic_Option_Settings();
+
+		$settings->alternate_redirect_uri = 0;
+		$this->assertSame( admin_url( 'admin-ajax.php?action=openid-connect-authorize' ), $this->oidc_plugin->get_redirect_uri( $settings ) );
+
+		// The alternate route is a rewrite rule, which WordPress matches relative to the home URL.
+		$settings->alternate_redirect_uri = 1;
+		$this->assertSame( home_url( '/openid-connect-authorize' ), $this->oidc_plugin->get_redirect_uri( $settings ) );
+		$this->assertStringNotContainsString( '/wp/', $this->oidc_plugin->get_redirect_uri( $settings ) );
+	}
+
+	/**
+	 * Upgrading a subdirectory install that uses the alternate redirect URI records the old URI.
+	 *
+	 * @group PluginTests
+	 */
+	public function test_upgrade_records_changed_redirect_uri() {
+		update_option( 'siteurl', home_url( '/wp' ) );
+
+		$this->run_upgrade( array( 'alternate_redirect_uri' => 1 ), '3.11.4' );
+		$this->assertSame( home_url( '/wp/openid-connect-authorize' ), get_option( OpenID_Connect_Generic::NOTICE_REDIRECT_URI_OPTION ) );
+
+		$this->run_upgrade( array( 'alternate_redirect_uri' => 0 ), '3.11.4' );
+		$this->assertFalse( get_option( OpenID_Connect_Generic::NOTICE_REDIRECT_URI_OPTION ), 'Sites using the admin-ajax redirect URI are unaffected.' );
+
+		$this->run_upgrade( array( 'alternate_redirect_uri' => 1 ), null );
+		$this->assertFalse( get_option( OpenID_Connect_Generic::NOTICE_REDIRECT_URI_OPTION ), 'New installs have nothing to update.' );
+	}
+
+	/**
+	 * Sites where WordPress is not in a subdirectory keep the same redirect URI and get no notice.
+	 *
+	 * @group PluginTests
+	 */
+	public function test_upgrade_ignores_unchanged_redirect_uri() {
+		$this->run_upgrade( array( 'alternate_redirect_uri' => 1 ), '3.11.4' );
+		$this->assertFalse( get_option( OpenID_Connect_Generic::NOTICE_REDIRECT_URI_OPTION ) );
+	}
+
+	/**
+	 * The redirect URI notice shows both URIs, and clears itself once they match.
+	 *
+	 * @group PluginTests
+	 */
+	public function test_redirect_uri_notice() {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		if ( is_multisite() ) {
+			grant_super_admin( get_current_user_id() );
+		}
+		update_option( 'siteurl', home_url( '/wp' ) );
+		update_option( OpenID_Connect_Generic::NOTICE_REDIRECT_URI_OPTION, home_url( '/wp/openid-connect-authorize' ) );
+
+		$property = new ReflectionProperty( OpenID_Connect_Generic::class, 'settings' );
+		$property->setAccessible( true );
+		$original = $property->getValue( $this->oidc_plugin );
+		$settings = new OpenID_Connect_Generic_Option_Settings();
+		$property->setValue( $this->oidc_plugin, $settings );
+
+		try {
+			$settings->alternate_redirect_uri = 1;
+			ob_start();
+			$this->oidc_plugin->admin_notice_redirect_uri_changed();
+			$output = ob_get_clean();
+
+			// A filter sending the old URI again means there is nothing left to update.
+			$keep_old = function () {
+				return home_url( '/wp/openid-connect-authorize' );
+			};
+			add_filter( 'openid-connect-generic-redirect-uri', $keep_old );
+			ob_start();
+			$this->oidc_plugin->admin_notice_redirect_uri_changed();
+			$cleared_output = ob_get_clean();
+			remove_filter( 'openid-connect-generic-redirect-uri', $keep_old );
+		} finally {
+			$property->setValue( $this->oidc_plugin, $original );
+		}
+
+		$this->assertStringContainsString( esc_html( home_url( '/wp/openid-connect-authorize' ) ), $output );
+		$this->assertStringContainsString( esc_html( home_url( '/openid-connect-authorize' ) ), $output );
+		$this->assertSame( '', $cleared_output );
+		$this->assertFalse( get_option( OpenID_Connect_Generic::NOTICE_REDIRECT_URI_OPTION ) );
+	}
+
+	/**
+	 * The redirect URI filter can change the URI sent to the identity provider.
+	 *
+	 * @group PluginTests
+	 */
+	public function test_redirect_uri_filter() {
+		$settings = new OpenID_Connect_Generic_Option_Settings();
+		$settings->alternate_redirect_uri = 1;
+
+		$filter = function ( $redirect_uri, $filter_settings ) use ( $settings ) {
+			$this->assertSame( home_url( '/openid-connect-authorize' ), $redirect_uri );
+			$this->assertSame( $settings, $filter_settings );
+			return 'https://example.com/custom-callback';
+		};
+		add_filter( 'openid-connect-generic-redirect-uri', $filter, 10, 2 );
+		$result = $this->oidc_plugin->get_redirect_uri( $settings );
+		remove_filter( 'openid-connect-generic-redirect-uri', $filter, 10 );
+
+		$this->assertSame( 'https://example.com/custom-callback', $result );
+	}
+
+	/**
 	 * Test plugin instance() method.
 	 *
 	 * @group PluginTests
@@ -161,6 +274,7 @@ class OpenID_Connect_Generic_Test extends WP_UnitTestCase {
 			update_option( 'openid-connect-generic-plugin-version', $last_version );
 		}
 		delete_option( OpenID_Connect_Generic::NOTICE_LINK_UNVERIFIED_OPTION );
+		delete_option( OpenID_Connect_Generic::NOTICE_REDIRECT_URI_OPTION );
 
 		$settings = new OpenID_Connect_Generic_Option_Settings(
 			array(
@@ -270,4 +384,27 @@ class OpenID_Connect_Generic_Test extends WP_UnitTestCase {
 
 	}
 
+	/**
+	 * Test the missing dependencies notice is shown only to users who can activate plugins.
+	 *
+	 * @group PluginTests
+	 */
+	public function test_admin_notice_missing_dependencies() {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+		ob_start();
+		OpenID_Connect_Generic::admin_notice_missing_dependencies();
+		$this->assertSame( '', ob_get_clean() );
+
+		// On multisite, only super admins can activate plugins.
+		$admin_id = self::factory()->user->create( array( 'role' => 'administrator' ) );
+		if ( is_multisite() ) {
+			grant_super_admin( $admin_id );
+		}
+		wp_set_current_user( $admin_id );
+		ob_start();
+		OpenID_Connect_Generic::admin_notice_missing_dependencies();
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'dependencies are missing', $output );
+		$this->assertStringContainsString( '<code>composer install --no-dev</code>', $output );
+	}
 }
