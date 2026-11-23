@@ -70,3 +70,15 @@
 	color: #d63638;
 	font-weight: bold;
 }
+
+/* Settings tabs */
+.oidc-tabs {
+	margin-bottom: 0;
+}
+
+/* A line above each subheading after the first in a tab */
+.oidc-tab-panel h2 ~ h2 {
+	margin-top: 2em;
+	padding-top: 1.5em;
+	border-top: 1px solid #c3c4c7;
+}
