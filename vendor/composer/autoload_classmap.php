@@ -119,6 +119,7 @@ return array(
     'OpenID_Connect_Generic_Client_Wrapper' => $baseDir . '/includes/openid-connect-generic-client-wrapper.php',
     'OpenID_Connect_Generic_JWT_Validator' => $baseDir . '/includes/openid-connect-generic-jwt-validator.php',
     'OpenID_Connect_Generic_Login_Form' => $baseDir . '/includes/openid-connect-generic-login-form.php',
+    'OpenID_Connect_Generic_Login_Preview' => $baseDir . '/includes/openid-connect-generic-login-preview.php',
     'OpenID_Connect_Generic_Option_Logger' => $baseDir . '/includes/openid-connect-generic-option-logger.php',
     'OpenID_Connect_Generic_Option_Settings' => $baseDir . '/includes/openid-connect-generic-option-settings.php',
     'OpenID_Connect_Generic_Settings_Page' => $baseDir . '/includes/openid-connect-generic-settings-page.php',

@@ -70,3 +70,118 @@
 	color: #d63638;
 	font-weight: bold;
 }
+
+/* Settings tabs */
+.oidc-tabs {
+	margin-bottom: 0;
+}
+
+/* A line above each subheading after the first in a tab */
+.oidc-tab-panel h2 ~ h2 {
+	margin-top: 2em;
+	padding-top: 1.5em;
+	border-top: 1px solid #c3c4c7;
+}
+
+/* Login button settings beside their preview */
+.oidc-login-settings {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+	gap: 20px;
+	align-items: start;
+}
+
+.oidc-login-settings .form-table th {
+	width: 150px;
+}
+
+.oidc-login-preview {
+	position: sticky;
+	/* Below the admin bar. It is taller on small screens, where the preview isn't sticky. */
+	top: 32px;
+	margin-top: 20px;
+}
+
+.oidc-login-preview .postbox-header h2 {
+	margin: 0;
+	padding: 8px 12px;
+	font-size: 14px;
+	line-height: 1.4;
+}
+
+.oidc-login-preview-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid #c3c4c7;
+}
+
+.oidc-login-preview-toolbar .button[aria-pressed="true"] {
+	background: #2271b1;
+	border-color: #2271b1;
+	color: #fff;
+}
+
+.oidc-login-preview-frame {
+	position: relative;
+}
+
+.oidc-login-preview-auto {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 24px;
+	background: rgba(240, 240, 241, 0.94);
+	color: #50575e;
+	text-align: center;
+}
+
+.oidc-login-preview-auto[hidden] {
+	display: none;
+}
+
+.oidc-login-preview-auto .dashicons {
+	width: 40px;
+	height: 40px;
+	font-size: 40px;
+	color: #2271b1;
+}
+
+.oidc-login-preview-auto strong {
+	color: #1d2327;
+	font-size: 14px;
+}
+
+.oidc-login-preview-auto p {
+	max-width: 300px;
+	margin: 0;
+}
+
+.oidc-login-preview-frame iframe {
+	display: block;
+	width: 100%;
+	height: 560px;
+	border: 0;
+}
+
+.oidc-login-preview-note {
+	margin: 0;
+	padding: 8px 12px;
+	border-top: 1px solid #c3c4c7;
+}
+
+@media screen and (max-width: 1100px) {
+	.oidc-login-settings {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.oidc-login-preview {
+		position: static;
+	}
+}

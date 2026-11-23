@@ -16,7 +16,7 @@
  * Plugin Name:       OpenID Connect Generic
  * Plugin URI:        https://github.com/oidc-wp/openid-connect-generic
  * Description:       Connect to an OpenID Connect identity provider using Authorization Code Flow.
- * Version:           3.11.5.2
+ * Version:           3.11.5.3
  * Requires at least: 6.7
  * Requires PHP:      8.2
  * Author:            daggerhart
@@ -107,7 +107,7 @@ class OpenID_Connect_Generic {
 	 *
 	 * @var string
 	 */
-	const VERSION = '3.11.5.2';
+	const VERSION = '3.11.5.3';
 
 	/**
 	 * Option flagging the admin notice about linking users without a verified email.
@@ -174,8 +174,14 @@ class OpenID_Connect_Generic {
 	 */
 	public function init() {
 
+		// The plugin's own translations, such as British English spelling.
+		load_plugin_textdomain( 'daggerhart-openid-connect-generic', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+
 		// Allow altering the settings.
 		$this->settings = apply_filters( 'openid-connect-generic-settings', $this->settings );
+
+		// A login button preview from the settings page changes settings for this request only.
+		$preview = OpenID_Connect_Generic_Login_Preview::maybe_start( $this->settings );
 
 		$this->client = new OpenID_Connect_Generic_Client(
 			$this->settings->client_id,
@@ -207,7 +213,10 @@ class OpenID_Connect_Generic {
 		// Add actions to our scheduled cron jobs.
 		add_action( 'openid-connect-generic-cron-daily', array( $this, 'cron_states_garbage_collection' ) );
 
-		$this->upgrade();
+		// Never run upgrades, which can save settings, while settings are changed for a preview.
+		if ( ! $preview ) {
+			$this->upgrade();
+		}
 
 		if ( is_admin() ) {
 			OpenID_Connect_Generic_Settings_Page::register( $this->settings, $this->logger );

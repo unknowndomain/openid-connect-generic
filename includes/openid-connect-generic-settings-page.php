@@ -148,6 +148,13 @@ class OpenID_Connect_Generic_Settings_Page {
 		);
 
 		add_settings_section(
+			'login_settings',
+			__( 'Login Button Settings', 'daggerhart-openid-connect-generic' ),
+			array( $this, 'login_settings_description' ),
+			$this->options_page_name
+		);
+
+		add_settings_section(
 			'client_settings',
 			__( 'Client Settings', 'daggerhart-openid-connect-generic' ),
 			array( $this, 'client_settings_description' ),
@@ -155,9 +162,37 @@ class OpenID_Connect_Generic_Settings_Page {
 		);
 
 		add_settings_section(
+			'endpoint_settings',
+			__( 'Endpoints', 'daggerhart-openid-connect-generic' ),
+			array( $this, 'endpoint_settings_description' ),
+			$this->options_page_name
+		);
+
+		add_settings_section(
+			'advanced_settings',
+			__( 'Advanced', 'daggerhart-openid-connect-generic' ),
+			array( $this, 'advanced_settings_description' ),
+			$this->options_page_name
+		);
+
+		add_settings_section(
 			'user_settings',
-			__( 'WordPress User Settings', 'daggerhart-openid-connect-generic' ),
+			__( 'Linking Users', 'daggerhart-openid-connect-generic' ),
 			array( $this, 'user_settings_description' ),
+			$this->options_page_name
+		);
+
+		add_settings_section(
+			'profile_settings',
+			__( 'Profile', 'daggerhart-openid-connect-generic' ),
+			array( $this, 'profile_settings_description' ),
+			$this->options_page_name
+		);
+
+		add_settings_section(
+			'session_settings',
+			__( 'Sessions', 'daggerhart-openid-connect-generic' ),
+			array( $this, 'session_settings_description' ),
 			$this->options_page_name
 		);
 
@@ -165,6 +200,13 @@ class OpenID_Connect_Generic_Settings_Page {
 			'authorization_settings',
 			__( 'Authorization Settings', 'daggerhart-openid-connect-generic' ),
 			array( $this, 'authorization_settings_description' ),
+			$this->options_page_name
+		);
+
+		add_settings_section(
+			'url_settings',
+			__( 'Important URLs', 'daggerhart-openid-connect-generic' ),
+			array( $this, 'url_settings_description' ),
 			$this->options_page_name
 		);
 
@@ -180,6 +222,11 @@ class OpenID_Connect_Generic_Settings_Page {
 			// Make sure each key exists in the settings array.
 			if ( ! isset( $this->settings->{ $key } ) ) {
 				$this->settings->{ $key } = null;
+			}
+
+			// Hidden settings are still submitted with the form, in settings_page(), so saving keeps them.
+			if ( ! empty( $field['hidden'] ) ) {
+				continue;
 			}
 
 			// Determine appropriate output callback.
@@ -212,6 +259,77 @@ class OpenID_Connect_Generic_Settings_Page {
 				$field
 			);
 		}
+
+		// The URLs tab shows addresses, not settings, so they are never saved.
+		foreach ( $this->get_urls() as $key => $url ) {
+			add_settings_field(
+				$key,
+				$url['title'],
+				array( $this, 'do_url' ),
+				$this->options_page_name,
+				'url_settings',
+				array_merge(
+					$url,
+					array(
+						'key'       => $key,
+						'label_for' => $key,
+					)
+				)
+			);
+		}
+	}
+
+	/**
+	 * Get the addresses to give the identity provider, or to link to.
+	 *
+	 * @return array Key => array( 'title', 'url', 'description' ).
+	 */
+	public function get_urls() {
+		return array(
+			'redirect_uri'           => array(
+				'title'       => __( 'Redirect URI', 'daggerhart-openid-connect-generic' ),
+				'url'         => OpenID_Connect_Generic::instance()->get_redirect_uri( $this->settings ),
+				'description' => __( 'Give this to your identity provider as the redirect URI. It changes with Alternate Redirect URI on the Client tab once saved.', 'daggerhart-openid-connect-generic' ),
+			),
+			'post_logout_redirect'   => array(
+				'title'       => __( 'Post Logout Redirect URI', 'daggerhart-openid-connect-generic' ),
+				'url'         => home_url(),
+				'description' => __( 'Where users come back to after logging out at the identity provider. With Auto Login it is this address. Otherwise it is the login page or the page they logged out from, so if your identity provider checks it, allow any address that starts with this one.', 'daggerhart-openid-connect-generic' ),
+			),
+			'backchannel_logout_url' => array(
+				'title'       => __( 'Back-Channel Logout URL', 'daggerhart-openid-connect-generic' ),
+				'url'         => admin_url( 'admin-ajax.php?action=openid-connect-backchannel-logout' ),
+				'description' => __( 'Give this to your identity provider as the back-channel logout URL. It only works with Back-Channel Logout ticked on the Users tab.', 'daggerhart-openid-connect-generic' ),
+			),
+			'login_link'             => array(
+				'title'       => __( 'Login Link', 'daggerhart-openid-connect-generic' ),
+				'url'         => add_query_arg( 'force_redirect', '1', wp_login_url() ),
+				'description' => __( 'Starts a login with the identity provider from anywhere, for example a menu link or the identity provider\'s launch URL. Add redirect_to with a page\'s address to send users there afterwards.', 'daggerhart-openid-connect-generic' ),
+			),
+		);
+	}
+
+	/**
+	 * Output an address to copy.
+	 *
+	 * @param array $url The address, from get_urls().
+	 *
+	 * @return void
+	 */
+	public function do_url( $url ) {
+		?>
+		<input type="text" id="<?php print esc_attr( $url['key'] ); ?>" class="large-text code" readonly value="<?php print esc_attr( $url['url'] ); ?>">
+		<p class="description"><?php print esc_html( $url['description'] ); ?></p>
+		<?php
+	}
+
+	/**
+	 * Whether WooCommerce is active, for the settings that only apply to it.
+	 *
+	 * @return bool
+	 */
+	protected function is_woocommerce_active() {
+		return class_exists( 'WooCommerce' );
 	}
 
 	/**
@@ -226,8 +344,9 @@ class OpenID_Connect_Generic_Settings_Page {
 		 *
 		 * - title
 		 * - description
-		 * - type ( checkbox | text | select )
-		 * - section - settings/option page section ( client_settings | authorization_settings )
+		 * - type ( checkbox | checkboxes | text | select )
+		 * - section - settings/option page section ( login_settings | client_settings | endpoint_settings | advanced_settings
+		 *   | user_settings | profile_settings | session_settings | authorization_settings | log_settings )
 		 * - example (optional example will appear beneath description and be wrapped in <code>)
 		 */
 		$fields = array(
@@ -241,21 +360,21 @@ class OpenID_Connect_Generic_Settings_Page {
 					'shortcode' => __( 'Shortcode Only', 'daggerhart-openid-connect-generic' ),
 				),
 				'disabled'    => defined( 'OIDC_LOGIN_TYPE' ),
-				'section'     => 'client_settings',
+				'section'     => 'login_settings',
 			),
 			'login_button_text' => array(
 				'title'       => __( 'Login Button Text', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'Customize the text shown on the OpenID Connect login button. Leave empty to use the default text.', 'daggerhart-openid-connect-generic' ),
 				'example'     => 'Login with Single Sign-On',
 				'type'        => 'text',
-				'section'     => 'client_settings',
+				'section'     => 'login_settings',
 			),
 			'login_button_icon' => array(
 				'title'       => __( 'Login Button Icon', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'URL of a PNG or SVG with a transparent background, shown before the text on the OpenID Connect login button. The icon is drawn in the button\'s text colour. Leave empty for no icon.', 'daggerhart-openid-connect-generic' ),
 				'example'     => 'https://example.com/wp-content/uploads/sso-icon.svg',
 				'type'        => 'text',
-				'section'     => 'client_settings',
+				'section'     => 'login_settings',
 			),
 			'woocommerce_login' => array(
 				'title'       => __( 'WooCommerce Login', 'daggerhart-openid-connect-generic' ),
@@ -267,7 +386,9 @@ class OpenID_Connect_Generic_Settings_Page {
 					'end'   => __( 'Bottom of the login form', 'daggerhart-openid-connect-generic' ),
 					'auto'  => __( 'Auto Login - SSO', 'daggerhart-openid-connect-generic' ),
 				),
-				'section'     => 'client_settings',
+				'section'     => 'login_settings',
+				// Without WooCommerce the setting does nothing, so it isn't shown.
+				'hidden'      => ! $this->is_woocommerce_active(),
 			),
 			'client_id'         => array(
 				'title'       => __( 'Client ID', 'daggerhart-openid-connect-generic' ),
@@ -298,7 +419,7 @@ class OpenID_Connect_Generic_Settings_Page {
 				'example'     => 'https://example.com/oauth2/authorize',
 				'type'        => 'text',
 				'disabled'    => defined( 'OIDC_ENDPOINT_LOGIN_URL' ),
-				'section'     => 'client_settings',
+				'section'     => 'endpoint_settings',
 			),
 			'endpoint_userinfo' => array(
 				'title'       => __( 'Userinfo Endpoint URL', 'daggerhart-openid-connect-generic' ),
@@ -306,7 +427,7 @@ class OpenID_Connect_Generic_Settings_Page {
 				'example'     => 'https://example.com/oauth2/UserInfo',
 				'type'        => 'text',
 				'disabled'    => defined( 'OIDC_ENDPOINT_USERINFO_URL' ),
-				'section'     => 'client_settings',
+				'section'     => 'endpoint_settings',
 			),
 			'endpoint_token'    => array(
 				'title'       => __( 'Token Validation Endpoint URL', 'daggerhart-openid-connect-generic' ),
@@ -314,7 +435,7 @@ class OpenID_Connect_Generic_Settings_Page {
 				'example'     => 'https://example.com/oauth2/token',
 				'type'        => 'text',
 				'disabled'    => defined( 'OIDC_ENDPOINT_TOKEN_URL' ),
-				'section'     => 'client_settings',
+				'section'     => 'endpoint_settings',
 			),
 			'endpoint_end_session'    => array(
 				'title'       => __( 'End Session Endpoint URL', 'daggerhart-openid-connect-generic' ),
@@ -322,7 +443,7 @@ class OpenID_Connect_Generic_Settings_Page {
 				'example'     => 'https://example.com/oauth2/logout',
 				'type'        => 'text',
 				'disabled'    => defined( 'OIDC_ENDPOINT_LOGOUT_URL' ),
-				'section'     => 'client_settings',
+				'section'     => 'endpoint_settings',
 			),
 			'endpoint_jwks' => array(
 				'title'       => __( 'JWKS URI', 'daggerhart-openid-connect-generic' ),
@@ -330,7 +451,7 @@ class OpenID_Connect_Generic_Settings_Page {
 				'example'     => 'https://example.com/.well-known/jwks.json',
 				'type'        => 'text',
 				'disabled'    => defined( 'OIDC_ENDPOINT_JWKS_URL' ),
-				'section'     => 'client_settings',
+				'section'     => 'endpoint_settings',
 			),
 			'issuer' => array(
 				'title'       => __( 'Issuer', 'daggerhart-openid-connect-generic' ),
@@ -338,14 +459,14 @@ class OpenID_Connect_Generic_Settings_Page {
 				'example'     => 'https://example.com',
 				'type'        => 'text',
 				'disabled'    => defined( 'OIDC_ISSUER' ),
-				'section'     => 'client_settings',
+				'section'     => 'endpoint_settings',
 			),
 			'jwks_cache_ttl' => array(
 				'title'       => __( 'JWKS Cache TTL (seconds)', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'Time in seconds to cache JWKS keys. Default: 3600 (1 hour)', 'daggerhart-openid-connect-generic' ),
 				'example'     => 3600,
 				'type'        => 'number',
-				'section'     => 'client_settings',
+				'section'     => 'endpoint_settings',
 			),
 			'acr_values'    => array(
 				'title'       => __( 'ACR values', 'daggerhart-openid-connect-generic' ),
@@ -359,14 +480,14 @@ class OpenID_Connect_Generic_Settings_Page {
 				'description' => __( 'Where in the user claim array to find the user\'s identification data. Possible standard values: preferred_username, name, or sub. If you\'re having trouble, use "sub".', 'daggerhart-openid-connect-generic' ),
 				'example'     => 'preferred_username',
 				'type'        => 'text',
-				'section'     => 'client_settings',
+				'section'     => 'user_settings',
 			),
 			'http_request_timeout'      => array(
 				'title'       => __( 'HTTP Request Timeout', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'Set the timeout for requests made to the IDP. Default value is 5.', 'daggerhart-openid-connect-generic' ),
 				'example'     => 30,
 				'type'        => 'text',
-				'section'     => 'client_settings',
+				'section'     => 'advanced_settings',
 			),
 			'enforce_privacy'   => array(
 				'title'       => __( 'Enforce Privacy', 'daggerhart-openid-connect-generic' ),
@@ -401,67 +522,67 @@ class OpenID_Connect_Generic_Settings_Page {
 				'title'       => __( 'Alternate Redirect URI', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'Provide an alternative redirect route. Useful if your server is causing issues with the default admin-ajax method. You must flush rewrite rules after changing this setting. This can be done by saving the Permalinks settings page.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'checkbox',
-				'section'     => 'authorization_settings',
+				'section'     => 'endpoint_settings',
 			),
 			'nickname_key'     => array(
 				'title'       => __( 'Nickname Key', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'Where in the user claim array to find the user\'s nickname. Possible standard values: preferred_username, name, or sub.', 'daggerhart-openid-connect-generic' ),
 				'example'     => 'preferred_username',
 				'type'        => 'text',
-				'section'     => 'client_settings',
+				'section'     => 'profile_settings',
 			),
 			'email_format'     => array(
 				'title'       => __( 'Email Formatting', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'String from which the user\'s email address is built. Specify "{email}" as long as the user claim contains an email claim.', 'daggerhart-openid-connect-generic' ),
 				'example'     => '{email}',
 				'type'        => 'text',
-				'section'     => 'client_settings',
+				'section'     => 'profile_settings',
 			),
 			'displayname_format'     => array(
 				'title'       => __( 'Display Name Formatting', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'String from which the user\'s display name is built.', 'daggerhart-openid-connect-generic' ),
 				'example'     => '{given_name} {family_name}',
 				'type'        => 'text',
-				'section'     => 'client_settings',
+				'section'     => 'profile_settings',
 			),
 			'identify_with_username'     => array(
 				'title'       => __( 'Identify with User Name', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'If checked, the user\'s identity will be determined by the user name instead of the email address.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'checkbox',
-				'section'     => 'client_settings',
+				'section'     => 'user_settings',
 			),
 			'state_time_limit'     => array(
 				'title'       => __( 'State time limit', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'State valid time in seconds. Defaults to 180', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'number',
-				'section'     => 'client_settings',
+				'section'     => 'advanced_settings',
 			),
 			'enable_pkce'   => array(
 				'title'       => __( 'Use PKCE', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'Send a PKCE (S256) code challenge with each login, as recommended by OAuth 2.0 security guidance. Most IDPs support it. Turn it off only if your IDP rejects logins with it.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'checkbox',
 				'disabled'    => defined( 'OIDC_ENABLE_PKCE' ),
-				'section'     => 'client_settings',
+				'section'     => 'advanced_settings',
 			),
 			'token_refresh_enable'   => array(
 				'title'       => __( 'Enable Refresh Token', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'If checked, support refresh tokens used to obtain access tokens from supported IDPs.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'checkbox',
-				'section'     => 'client_settings',
+				'section'     => 'session_settings',
 			),
 			'no_sslverify'      => array(
 				'title'       => __( 'Disable SSL Verify', 'daggerhart-openid-connect-generic' ),
 				// translators: %1$s HTML tags for layout/styles (strong tag start with warning class), %2$s closing HTML tag for styles.
 				'description' => sprintf( __( 'Do not require SSL verification during authorization. %1$sOnly works in local development (WP_DEBUG=true, WP_ENVIRONMENT_TYPE=local).%2$s This setting is automatically disabled in production. If you need this in production, fix your SSL certificates instead.', 'daggerhart-openid-connect-generic' ), '<br><strong class="oidc-warning">', '</strong>' ),
 				'type'        => 'checkbox',
-				'section'     => 'client_settings',
+				'section'     => 'advanced_settings',
 			),
 			'allow_internal_idp'      => array(
 				'title'       => __( 'Allow Internal IDP', 'daggerhart-openid-connect-generic' ),
 				// translators: %1$s HTML tags for layout/styles (strong tag start with warning class), %2$s closing HTML tag for styles.
 				'description' => sprintf( __( 'Allow HTTP requests to internal/private network endpoints (localhost, 127.0.0.1, 10.x.x.x, 192.168.x.x, 172.16-31.x.x). %1$sOnly enable this for local development or corporate internal identity providers. Disabling SSRF protection can expose your server to security risks.%2$s', 'daggerhart-openid-connect-generic' ), '<br><strong class="oidc-warning">', '</strong>' ),
 				'type'        => 'checkbox',
-				'section'     => 'client_settings',
+				'section'     => 'advanced_settings',
 			),
 			'link_existing_users'   => array(
 				'title'       => __( 'Link Existing Users', 'daggerhart-openid-connect-generic' ),
@@ -490,25 +611,21 @@ class OpenID_Connect_Generic_Settings_Page {
 				'description' => __( 'After a successful OpenID Connect authentication, this will redirect the user back to the page on which they clicked the OpenID Connect login button. This will cause the login process to proceed in a traditional WordPress fashion. For example, users logging in through the default wp-login.php page would end up on the WordPress Dashboard and users logging in through the WooCommerce "My Account" page would end up on their account page.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'checkbox',
 				'disabled'    => defined( 'OIDC_REDIRECT_USER_BACK' ),
-				'section'     => 'user_settings',
+				'section'     => 'session_settings',
 			),
 			'backchannel_logout'   => array(
 				'title'       => __( 'Back-Channel Logout', 'daggerhart-openid-connect-generic' ),
-				'description' => sprintf(
-					// translators: %s is the back-channel logout URL.
-					__( 'Log users out of WordPress when the identity provider ends their session, for example when they log out elsewhere or their account is disabled. Give the identity provider this back-channel logout URL: %s', 'daggerhart-openid-connect-generic' ),
-					'<code>' . esc_html( admin_url( 'admin-ajax.php?action=openid-connect-backchannel-logout' ) ) . '</code>'
-				),
+				'description' => __( 'Log users out of WordPress when the identity provider ends their session, for example when they log out elsewhere or their account is disabled. Give the identity provider the Back-Channel Logout URL from the URLs tab.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'checkbox',
 				'disabled'    => defined( 'OIDC_BACKCHANNEL_LOGOUT' ),
-				'section'     => 'user_settings',
+				'section'     => 'session_settings',
 			),
 			'redirect_on_logout'   => array(
 				'title'       => __( 'Redirect to the login screen when session is expired', 'daggerhart-openid-connect-generic' ),
 				'description' => __( 'When enabled, this will automatically redirect the user back to the WordPress login page if their access token has expired.', 'daggerhart-openid-connect-generic' ),
 				'type'        => 'checkbox',
 				'disabled'    => defined( 'OIDC_REDIRECT_ON_LOGOUT' ),
-				'section'     => 'user_settings',
+				'section'     => 'session_settings',
 			),
 			'enable_logging'    => array(
 				'title'       => __( 'Enable Logging', 'daggerhart-openid-connect-generic' ),
@@ -557,7 +674,61 @@ class OpenID_Connect_Generic_Settings_Page {
 	}
 
 	/**
+	 * Get the tabs of the settings page, and the settings sections each one shows.
+	 *
+	 * Sections added to the page by other code each get a tab of their own.
+	 *
+	 * @return array Tab ID => array( 'title' => string, 'sections' => string[] ).
+	 */
+	public function get_tabs() {
+		global $wp_settings_sections;
+
+		$tabs = array(
+			'client'        => array(
+				'title'    => __( 'Client', 'daggerhart-openid-connect-generic' ),
+				'sections' => array( 'client_settings', 'endpoint_settings', 'advanced_settings' ),
+			),
+			'urls'          => array(
+				'title'    => __( 'URLs', 'daggerhart-openid-connect-generic' ),
+				'sections' => array( 'url_settings' ),
+			),
+			'login'         => array(
+				'title'    => __( 'Login Button', 'daggerhart-openid-connect-generic' ),
+				'sections' => array( 'login_settings' ),
+			),
+			'users'         => array(
+				'title'    => __( 'Users', 'daggerhart-openid-connect-generic' ),
+				'sections' => array( 'user_settings', 'profile_settings', 'session_settings' ),
+			),
+			'authorization' => array(
+				'title'    => __( 'Authorization', 'daggerhart-openid-connect-generic' ),
+				'sections' => array( 'authorization_settings' ),
+			),
+			'logs'          => array(
+				'title'    => __( 'Logs', 'daggerhart-openid-connect-generic' ),
+				'sections' => array( 'log_settings' ),
+			),
+		);
+
+		$known_sections = array_merge( ...array_values( wp_list_pluck( $tabs, 'sections' ) ) );
+		$page_sections  = isset( $wp_settings_sections[ $this->options_page_name ] ) ? (array) $wp_settings_sections[ $this->options_page_name ] : array();
+		foreach ( $page_sections as $section_id => $section ) {
+			if ( ! in_array( $section_id, $known_sections, true ) ) {
+				// Prefixed, so a section can never replace one of the tabs above and leave its settings out of the form.
+				$tabs[ 'section-' . sanitize_key( $section_id ) ] = array(
+					'title'    => ! empty( $section['title'] ) ? $section['title'] : $section_id,
+					'sections' => array( $section_id ),
+				);
+			}
+		}
+
+		return $tabs;
+	}
+
+	/**
 	 * Output the options/settings page.
+	 *
+	 * Every tab is part of one form, because saving clears any setting that isn't submitted.
 	 *
 	 * @return void
 	 */
@@ -566,50 +737,188 @@ class OpenID_Connect_Generic_Settings_Page {
 		$this->handle_discovery_import();
 
 		wp_enqueue_style( 'daggerhart-openid-connect-generic-admin', plugin_dir_url( __DIR__ ) . 'css/styles-admin.css', array(), OpenID_Connect_Generic::VERSION, 'all' );
+		wp_enqueue_script( 'daggerhart-openid-connect-generic-admin', plugin_dir_url( __DIR__ ) . 'js/settings-page.js', array(), OpenID_Connect_Generic::VERSION, true );
 
-		$plugin = OpenID_Connect_Generic::instance();
-
-		$redirect_uri = $plugin->get_redirect_uri( $this->settings );
+		$tabs = $this->get_tabs();
 
 		?>
-		<div class="wrap">
+		<div class="wrap oidc-settings">
 			<h2><?php print esc_html( get_admin_page_title() ); ?></h2>
 
-			<?php
-			// Render discovery document import form.
-			$this->render_discovery_form();
-			?>
+			<nav class="nav-tab-wrapper oidc-tabs" aria-label="<?php esc_attr_e( 'Settings sections', 'daggerhart-openid-connect-generic' ); ?>">
+				<?php foreach ( $tabs as $tab_id => $tab ) : ?>
+					<a href="#<?php print esc_attr( $tab_id ); ?>" class="nav-tab" data-oidc-tab="<?php print esc_attr( $tab_id ); ?>"><?php print esc_html( $tab['title'] ); ?></a>
+				<?php endforeach; ?>
+			</nav>
 
-			<form method="post" action="options.php">
+			<div class="oidc-tab-panel" data-oidc-tab-panel="client">
+				<?php
+				// Render discovery document import form.
+				$this->render_discovery_form();
+				?>
+			</div>
+
+			<form method="post" action="options.php" class="oidc-settings-form">
 				<?php
 				settings_fields( $this->settings_field_group );
-				do_settings_sections( $this->options_page_name );
+
+				// Saving clears any setting that isn't submitted, so hidden ones are kept here.
+				foreach ( $this->settings_fields as $key => $field ) {
+					if ( ! empty( $field['hidden'] ) ) {
+						?>
+						<input type="hidden" name="<?php print esc_attr( $field['name'] ); ?>" value="<?php print esc_attr( (string) $this->settings->{ $key } ); ?>">
+						<?php
+					}
+				}
+
+				foreach ( $tabs as $tab_id => $tab ) {
+					?>
+					<div class="oidc-tab-panel" id="oidc-tab-<?php print esc_attr( $tab_id ); ?>" data-oidc-tab-panel="<?php print esc_attr( $tab_id ); ?>">
+						<?php
+						if ( 'login' === $tab_id ) {
+							print '<div class="oidc-login-settings"><div class="oidc-login-settings-fields">';
+						}
+
+						foreach ( $tab['sections'] as $section_id ) {
+							$this->do_settings_section( $section_id );
+						}
+
+						if ( 'login' === $tab_id ) {
+							?>
+							<p class="description">
+								<strong><?php esc_html_e( 'Login Button Shortcode', 'daggerhart-openid-connect-generic' ); ?></strong>
+								<code>[openid_connect_generic_login_button]</code>
+							</p>
+							<p class="description">
+								<strong><?php esc_html_e( 'Authentication URL Shortcode', 'daggerhart-openid-connect-generic' ); ?></strong>
+								<code>[openid_connect_generic_auth_url]</code>
+							</p>
+							</div>
+							<?php
+							$this->render_login_preview();
+							print '</div>';
+						}
+
+						if ( 'logs' === $tab_id && $this->settings->enable_logging ) {
+							?>
+							<h2><?php esc_html_e( 'Logs', 'daggerhart-openid-connect-generic' ); ?></h2>
+							<div id="logger-table-wrapper">
+								<?php print wp_kses_post( $this->logger->get_logs_table() ); ?>
+							</div>
+							<?php
+						}
+						?>
+					</div>
+					<?php
+				}
+
 				submit_button();
 				?>
 			</form>
+		</div>
+		<?php
+	}
 
-			<h4><?php esc_html_e( 'Notes', 'daggerhart-openid-connect-generic' ); ?></h4>
+	/**
+	 * Output one settings section of this page, as do_settings_sections() does for every section.
+	 *
+	 * @param string $section_id The settings section ID.
+	 *
+	 * @return void
+	 */
+	private function do_settings_section( $section_id ) {
+		global $wp_settings_sections;
 
-			<p class="description">
-				<strong><?php esc_html_e( 'Redirect URI', 'daggerhart-openid-connect-generic' ); ?></strong>
-				<code><?php print esc_url( $redirect_uri ); ?></code>
-			</p>
-			<p class="description">
-				<strong><?php esc_html_e( 'Login Button Shortcode', 'daggerhart-openid-connect-generic' ); ?></strong>
-				<code>[openid_connect_generic_login_button]</code>
-			</p>
-			<p class="description">
-				<strong><?php esc_html_e( 'Authentication URL Shortcode', 'daggerhart-openid-connect-generic' ); ?></strong>
-				<code>[openid_connect_generic_auth_url]</code>
-			</p>
+		if ( empty( $wp_settings_sections[ $this->options_page_name ][ $section_id ] ) ) {
+			return;
+		}
 
-			<?php if ( $this->settings->enable_logging ) { ?>
-				<h2><?php esc_html_e( 'Logs', 'daggerhart-openid-connect-generic' ); ?></h2>
-				<div id="logger-table-wrapper">
-					<?php print wp_kses_post( $this->logger->get_logs_table() ); ?>
+		$section = $wp_settings_sections[ $this->options_page_name ][ $section_id ];
+
+		if ( ! empty( $section['title'] ) ) {
+			print '<h2>' . esc_html( $section['title'] ) . '</h2>';
+		}
+
+		if ( ! empty( $section['callback'] ) ) {
+			call_user_func( $section['callback'], $section );
+		}
+
+		print '<table class="form-table" role="presentation">';
+		do_settings_fields( $this->options_page_name, $section_id );
+		print '</table>';
+	}
+
+	/**
+	 * Output the login button preview.
+	 *
+	 * It shows the real pages in a frame, with the login button settings from the form before they are saved.
+	 *
+	 * @return void
+	 */
+	private function render_login_preview() {
+		$views = array(
+			'login'     => __( 'Login page', 'daggerhart-openid-connect-generic' ),
+			'myaccount' => __( 'WooCommerce My Account', 'daggerhart-openid-connect-generic' ),
+			'shortcode' => __( 'Shortcode', 'daggerhart-openid-connect-generic' ),
+		);
+
+		$urls = array();
+		foreach ( array_keys( $views ) as $view ) {
+			$url = OpenID_Connect_Generic_Login_Preview::get_url( $view );
+			if ( empty( $url ) ) {
+				unset( $views[ $view ] );
+				continue;
+			}
+			$urls[ $view ] = $url;
+		}
+
+		$myaccount_note = __( 'My Account as a logged out visitor sees it, in your theme. Checkout\'s Returning customer form shows the button the same way.', 'daggerhart-openid-connect-generic' );
+
+		// Notes for each view, by the setting that decides what it shows.
+		$notes = array(
+			'login'     => array(
+				'button'    => __( 'The button is shown above the login form.', 'daggerhart-openid-connect-generic' ),
+				'auto'      => __( 'Auto Login sends visitors straight to the identity provider. This is the page they see after logging out.', 'daggerhart-openid-connect-generic' ),
+				'shortcode' => __( 'Shortcode Only leaves the login page unchanged.', 'daggerhart-openid-connect-generic' ),
+			),
+			'myaccount' => array(
+				''      => __( 'My Account is left unchanged.', 'daggerhart-openid-connect-generic' ),
+				'start' => $myaccount_note,
+				'end'   => $myaccount_note,
+				'auto'  => __( 'Auto Login sends visitors straight to the identity provider, so they never see this form.', 'daggerhart-openid-connect-generic' ),
+			),
+			'shortcode' => array(
+				'' => __( 'The shortcode\'s button, styled by your theme.', 'daggerhart-openid-connect-generic' ),
+			),
+			'no_dark'   => __( 'This page has no dark mode.', 'daggerhart-openid-connect-generic' ),
+			'auto'      => __( 'Sent straight to the identity provider', 'daggerhart-openid-connect-generic' ),
+		);
+		?>
+		<div class="postbox oidc-login-preview" data-oidc-preview-urls="<?php print esc_attr( wp_json_encode( $urls ) ); ?>" data-oidc-preview-notes="<?php print esc_attr( wp_json_encode( $notes ) ); ?>" data-oidc-preview-settings-var="<?php print esc_attr( OpenID_Connect_Generic_Login_Preview::SETTINGS_QUERY_VAR ); ?>">
+			<div class="postbox-header">
+				<h2><?php esc_html_e( 'Preview', 'daggerhart-openid-connect-generic' ); ?></h2>
+			</div>
+			<div class="oidc-login-preview-toolbar">
+				<span class="button-group" role="group" aria-label="<?php esc_attr_e( 'Page to preview', 'daggerhart-openid-connect-generic' ); ?>">
+					<?php foreach ( $views as $view => $label ) : ?>
+						<button type="button" class="button" data-oidc-preview-view="<?php print esc_attr( $view ); ?>" aria-pressed="false"><?php print esc_html( $label ); ?></button>
+					<?php endforeach; ?>
+				</span>
+				<span class="button-group" role="group" aria-label="<?php esc_attr_e( 'Colour scheme', 'daggerhart-openid-connect-generic' ); ?>">
+					<button type="button" class="button" data-oidc-preview-scheme="light" aria-pressed="false"><?php esc_html_e( 'Light', 'daggerhart-openid-connect-generic' ); ?></button>
+					<button type="button" class="button" data-oidc-preview-scheme="dark" aria-pressed="false"><?php esc_html_e( 'Dark', 'daggerhart-openid-connect-generic' ); ?></button>
+				</span>
+			</div>
+			<div class="oidc-login-preview-frame">
+				<?php // No scripts in the preview, so it can't take focus or act on the page. Same origin keeps the admin's cookie for the nonce check. ?>
+				<iframe title="<?php esc_attr_e( 'Login button preview', 'daggerhart-openid-connect-generic' ); ?>" loading="lazy" tabindex="-1" sandbox="allow-same-origin"></iframe>
+				<div class="oidc-login-preview-auto" hidden>
+					<span class="dashicons dashicons-migrate" aria-hidden="true"></span>
+					<strong></strong>
+					<p></p>
 				</div>
-
-			<?php } ?>
+			</div>
+			<p class="description oidc-login-preview-note"></p>
 		</div>
 		<?php
 	}
@@ -728,6 +1037,15 @@ class OpenID_Connect_Generic_Settings_Page {
 	}
 
 	/**
+	 * Output the 'Login Button Settings' plugin setting section description.
+	 *
+	 * @return void
+	 */
+	public function login_settings_description() {
+		esc_html_e( 'Choose how the login button looks and where it is shown.', 'daggerhart-openid-connect-generic' );
+	}
+
+	/**
 	 * Output the 'Client Settings' plugin setting section description.
 	 *
 	 * @return void
@@ -737,12 +1055,48 @@ class OpenID_Connect_Generic_Settings_Page {
 	}
 
 	/**
-	 * Output the 'WordPress User Settings' plugin setting section description.
+	 * Output the 'Linking Users' plugin setting section description.
 	 *
 	 * @return void
 	 */
 	public function user_settings_description() {
-		esc_html_e( 'Modify the interaction between OpenID Connect and WordPress users.', 'daggerhart-openid-connect-generic' );
+		esc_html_e( 'How identity provider accounts are matched to WordPress users, or created.', 'daggerhart-openid-connect-generic' );
+	}
+
+	/**
+	 * Output the 'Endpoints' plugin setting section description.
+	 *
+	 * @return void
+	 */
+	public function endpoint_settings_description() {
+		esc_html_e( 'Where to reach your identity provider. Importing a discovery document fills these in.', 'daggerhart-openid-connect-generic' );
+	}
+
+	/**
+	 * Output the 'Advanced' plugin setting section description.
+	 *
+	 * @return void
+	 */
+	public function advanced_settings_description() {
+		esc_html_e( 'Most sites can leave these as they are.', 'daggerhart-openid-connect-generic' );
+	}
+
+	/**
+	 * Output the 'Profile' plugin setting section description.
+	 *
+	 * @return void
+	 */
+	public function profile_settings_description() {
+		esc_html_e( 'How details from the identity provider fill in the WordPress profile.', 'daggerhart-openid-connect-generic' );
+	}
+
+	/**
+	 * Output the 'Sessions' plugin setting section description.
+	 *
+	 * @return void
+	 */
+	public function session_settings_description() {
+		esc_html_e( 'Where users go after logging in, and how their sessions end.', 'daggerhart-openid-connect-generic' );
 	}
 
 	/**
@@ -752,6 +1106,15 @@ class OpenID_Connect_Generic_Settings_Page {
 	 */
 	public function authorization_settings_description() {
 		esc_html_e( 'Control the authorization mechanics of the site.', 'daggerhart-openid-connect-generic' );
+	}
+
+	/**
+	 * Output the 'Important URLs' plugin setting section description.
+	 *
+	 * @return void
+	 */
+	public function url_settings_description() {
+		esc_html_e( 'Addresses to give your identity provider, and to link to.', 'daggerhart-openid-connect-generic' );
 	}
 
 	/**
@@ -1024,6 +1387,8 @@ class OpenID_Connect_Generic_Settings_Page {
 									<strong><?php esc_html_e( 'Examples:', 'daggerhart-openid-connect-generic' ); ?></strong>
 									<br>
 									• Auth0: <code>https://{tenant}.{region}.auth0.com/.well-known/openid-configuration</code>
+									<br>
+									• Authentik: <code>https://{domain}/application/o/{application slug}/.well-known/openid-configuration</code>
 									<br>
 									• Keycloak: <code>https://{domain}/realms/{realm}/.well-known/openid-configuration</code>
 									<br>

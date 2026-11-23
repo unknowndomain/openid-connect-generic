@@ -142,6 +142,7 @@ class ComposerStaticInitbb41ae567275150644796d719971c911
         'OpenID_Connect_Generic_Client_Wrapper' => __DIR__ . '/../..' . '/includes/openid-connect-generic-client-wrapper.php',
         'OpenID_Connect_Generic_JWT_Validator' => __DIR__ . '/../..' . '/includes/openid-connect-generic-jwt-validator.php',
         'OpenID_Connect_Generic_Login_Form' => __DIR__ . '/../..' . '/includes/openid-connect-generic-login-form.php',
+        'OpenID_Connect_Generic_Login_Preview' => __DIR__ . '/../..' . '/includes/openid-connect-generic-login-preview.php',
         'OpenID_Connect_Generic_Option_Logger' => __DIR__ . '/../..' . '/includes/openid-connect-generic-option-logger.php',
         'OpenID_Connect_Generic_Option_Settings' => __DIR__ . '/../..' . '/includes/openid-connect-generic-option-settings.php',
         'OpenID_Connect_Generic_Settings_Page' => __DIR__ . '/../..' . '/includes/openid-connect-generic-settings-page.php',

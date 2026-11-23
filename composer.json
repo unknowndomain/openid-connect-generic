@@ -68,6 +68,7 @@
       "includes/openid-connect-generic-client-wrapper.php",
       "includes/openid-connect-generic-jwt-validator.php",
       "includes/openid-connect-generic-login-form.php",
+      "includes/openid-connect-generic-login-preview.php",
       "includes/openid-connect-generic-option-logger.php",
       "includes/openid-connect-generic-option-settings.php",
       "includes/openid-connect-generic-settings-page.php"

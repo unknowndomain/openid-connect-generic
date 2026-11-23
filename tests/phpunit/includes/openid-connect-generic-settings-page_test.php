@@ -329,14 +329,213 @@ class OpenID_Connect_Generic_Settings_Page_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Render the settings page.
+	 *
+	 * @param OpenID_Connect_Generic_Settings_Page $settings_page The settings page.
+	 *
+	 * @return string
+	 */
+	private function render_settings_page( $settings_page ) {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$settings_page->admin_init();
+		ob_start();
+		$settings_page->settings_page();
+		return ob_get_clean();
+	}
+
+	/**
+	 * Get the HTML of one tab's panel inside the settings form.
+	 *
+	 * @param string $output The settings page HTML.
+	 * @param string $tab    The tab ID.
+	 *
+	 * @return string
+	 */
+	private function get_tab_panel( $output, $tab ) {
+		$start = strpos( $output, 'id="oidc-tab-' . $tab . '"' );
+		$this->assertNotFalse( $start, "The {$tab} tab has a panel." );
+		$end = strpos( $output, 'class="oidc-tab-panel"', $start );
+		return false === $end ? substr( $output, $start ) : substr( $output, $start, $end - $start );
+	}
+
+	/**
+	 * Every tab's settings are in one form, so saving never clears the settings on other tabs.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_settings_page_tabs_share_one_form() {
+		$output = $this->render_settings_page( $this->create_settings_page() );
+
+		$this->assertSame( 1, substr_count( $output, 'action="options.php"' ) );
+		foreach ( array( 'client', 'urls', 'login', 'users', 'authorization', 'logs' ) as $tab ) {
+			$this->assertStringContainsString( 'data-oidc-tab="' . $tab . '"', $output );
+		}
+
+		$form = substr( $output, strpos( $output, 'action="options.php"' ) );
+		$form = substr( $form, 0, strpos( $form, '</form>' ) );
+		foreach ( array( 'client_id', 'login_type', 'login_button_text', 'woocommerce_login', 'identity_key', 'link_existing_users', 'backchannel_logout', 'enforce_privacy', 'password_login', 'log_limit' ) as $key ) {
+			$this->assertStringContainsString( 'id="' . $key . '"', $form, "{$key} is in the settings form." );
+		}
+	}
+
+	/**
+	 * Settings are grouped into the tab they belong to.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_settings_page_groups_settings_into_tabs() {
+		$output = $this->render_settings_page( $this->create_settings_page() );
+
+		$login = $this->get_tab_panel( $output, 'login' );
+		foreach ( array( 'login_type', 'login_button_text', 'login_button_icon', 'woocommerce_login' ) as $key ) {
+			$this->assertStringContainsString( 'id="' . $key . '"', $login, "{$key} is on the Login Button tab." );
+		}
+		$this->assertStringContainsString( 'oidc-login-preview', $login );
+		$this->assertStringNotContainsString( 'id="client_id"', $login );
+
+		$users = $this->get_tab_panel( $output, 'users' );
+		foreach ( array( 'identity_key', 'nickname_key', 'link_existing_users', 'backchannel_logout' ) as $key ) {
+			$this->assertStringContainsString( 'id="' . $key . '"', $users, "{$key} is on the Users tab." );
+		}
+
+		$authorization = $this->get_tab_panel( $output, 'authorization' );
+		$this->assertStringContainsString( 'id="password_login"', $authorization );
+		$this->assertStringContainsString( 'password_login_roles', $authorization );
+
+		$this->assertStringContainsString( 'id="token_refresh_enable"', $users );
+		$this->assertStringContainsString( '<h2>Profile</h2>', $users );
+		$this->assertStringContainsString( '<h2>Sessions</h2>', $users );
+
+		$client = $this->get_tab_panel( $output, 'client' );
+		$this->assertStringContainsString( 'id="client_id"', $client );
+		$this->assertStringContainsString( 'id="alternate_redirect_uri"', $client );
+
+		$urls = $this->get_tab_panel( $output, 'urls' );
+		$this->assertStringContainsString( 'value="' . esc_attr( admin_url( 'admin-ajax.php?action=openid-connect-authorize' ) ) . '"', $urls );
+		$this->assertStringContainsString( 'value="' . esc_attr( admin_url( 'admin-ajax.php?action=openid-connect-backchannel-logout' ) ) . '"', $urls );
+		$this->assertStringContainsString( 'value="' . esc_attr( home_url() ) . '"', $urls );
+		$this->assertStringContainsString( 'force_redirect=1', $urls );
+		$this->assertStringContainsString( '<h2>Endpoints</h2>', $client );
+		$this->assertStringContainsString( '<h2>Advanced</h2>', $client );
+		$this->assertStringNotContainsString( 'id="identity_key"', $client );
+		$this->assertStringNotContainsString( 'id="woocommerce_login"', $client );
+	}
+
+	/**
+	 * The preview frame gets a nonced URL for each page that can be previewed, and runs no scripts.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_settings_page_preview_urls() {
+		$output = $this->render_settings_page( $this->create_settings_page() );
+
+		$this->assertSame( 1, preg_match( '/data-oidc-preview-urls="([^"]*)"/', $output, $matches ) );
+		$urls = json_decode( html_entity_decode( $matches[1] ), true );
+
+		$this->assertSame( array( 'login', 'shortcode' ), array_keys( $urls ), 'My Account needs WooCommerce.' );
+		$this->assertStringContainsString( '_wpnonce=', $urls['login'] );
+		$this->assertStringContainsString( 'data-oidc-preview-view="login"', $output );
+		$this->assertStringNotContainsString( 'data-oidc-preview-view="myaccount"', $output );
+		$this->assertStringContainsString( 'sandbox="allow-same-origin"', $output );
+		$this->assertStringContainsString( 'data-oidc-preview-scheme="light"', $output );
+		$this->assertStringContainsString( 'data-oidc-preview-scheme="dark"', $output );
+	}
+
+	/**
+	 * The URLs tab only shows addresses: saving never stores them as settings.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_settings_page_urls_are_not_saved() {
+		$settings_page = $this->create_settings_page();
+		$output        = $this->render_settings_page( $settings_page );
+
+		$this->assertSame( 0, preg_match( '/name="[^"]*\\[(redirect_uri|post_logout_redirect|backchannel_logout_url|login_link)\\]"/', $output ) );
+
+		$saved = $settings_page->sanitize_settings( array( 'redirect_uri' => 'https://attacker.example/' ) );
+		$this->assertArrayNotHasKey( 'redirect_uri', $saved );
+	}
+
+	/**
+	 * A section another plugin adds to the page gets a tab of its own, so it doesn't disappear.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_settings_page_other_sections_get_a_tab() {
+		$settings_page = $this->create_settings_page();
+		add_settings_section( 'extra_settings', 'Extra Settings', '__return_false', 'openid-connect-generic-settings' );
+		add_settings_field( 'extra_field', 'Extra Field', array( $this, 'print_extra_field' ), 'openid-connect-generic-settings', 'extra_settings' );
+
+		$output = $this->render_settings_page( $settings_page );
+
+		global $wp_settings_sections, $wp_settings_fields;
+		unset( $wp_settings_sections['openid-connect-generic-settings'], $wp_settings_fields['openid-connect-generic-settings'] );
+
+		$this->assertStringContainsString( 'data-oidc-tab="section-extra_settings">Extra Settings</a>', $output );
+		$this->assertStringContainsString( 'id="extra_field"', $this->get_tab_panel( $output, 'section-extra_settings' ) );
+	}
+
+	/**
+	 * A section with the same ID as a tab gets its own tab, and never replaces the tab or its settings.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_settings_page_section_cannot_replace_tab() {
+		$settings_page = $this->create_settings_page();
+		add_settings_section( 'client', 'Other Client', '__return_false', 'openid-connect-generic-settings' );
+		add_settings_field( 'extra_field', 'Extra Field', array( $this, 'print_extra_field' ), 'openid-connect-generic-settings', 'client' );
+
+		$output = $this->render_settings_page( $settings_page );
+
+		global $wp_settings_sections, $wp_settings_fields;
+		unset( $wp_settings_sections['openid-connect-generic-settings'], $wp_settings_fields['openid-connect-generic-settings'] );
+
+		$this->assertStringContainsString( 'id="client_id"', $this->get_tab_panel( $output, 'client' ) );
+		$this->assertStringContainsString( 'id="extra_field"', $this->get_tab_panel( $output, 'section-client' ) );
+	}
+
+	/**
+	 * Print the test's extra settings field.
+	 *
+	 * @return void
+	 */
+	public function print_extra_field() {
+		echo '<input id="extra_field">';
+	}
+
+	/**
 	 * Helper to create settings page instance.
+	 *
+	 * @param bool                                        $woocommerce Whether WooCommerce is active.
+	 * @param OpenID_Connect_Generic_Option_Settings|null $settings    The settings, or null for empty ones.
 	 *
 	 * @return OpenID_Connect_Generic_Settings_Page
 	 */
-	private function create_settings_page() {
-		$settings = new OpenID_Connect_Generic_Option_Settings( array() );
+	private function create_settings_page( $woocommerce = true, $settings = null ) {
+		$settings = $settings ?? new OpenID_Connect_Generic_Option_Settings( array() );
 		$logger = $this->createMock( OpenID_Connect_Generic_Option_Logger::class );
-		return new OpenID_Connect_Generic_Settings_Page( $settings, $logger );
+		if ( ! $woocommerce ) {
+			return new class( $settings, $logger ) extends OpenID_Connect_Generic_Settings_Page {
+				/**
+				 * WooCommerce isn't active.
+				 *
+				 * @return bool
+				 */
+				protected function is_woocommerce_active() {
+					return false;
+				}
+			};
+		}
+		return new class( $settings, $logger ) extends OpenID_Connect_Generic_Settings_Page {
+			/**
+			 * WooCommerce is active.
+			 *
+			 * @return bool
+			 */
+			protected function is_woocommerce_active() {
+				return true;
+			}
+		};
 	}
 
 	/**
@@ -399,4 +598,36 @@ class OpenID_Connect_Generic_Settings_Page_Test extends WP_UnitTestCase {
 		}
 	}
 
+	/**
+	 * The plugin's British English translations spell authorisation with an s.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_british_english_spelling() {
+		$domain = 'daggerhart-openid-connect-generic';
+		load_textdomain( $domain, dirname( __DIR__, 3 ) . '/languages/daggerhart-openid-connect-generic-en_GB.mo', 'en_GB' );
+
+		$this->assertSame( 'Authorisation Settings', __( 'Authorization Settings', $domain ) );
+		$this->assertSame( 'Unauthorised access.', __( 'Unauthorized access.', $domain ) );
+
+		unload_textdomain( $domain );
+		$this->assertSame( 'Authorization Settings', __( 'Authorization Settings', $domain ) );
+	}
+
+	/**
+	 * Without WooCommerce, WooCommerce Login isn't shown, but its saved value is still submitted so saving keeps it.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_woocommerce_login_hidden_without_woocommerce() {
+		$settings = new OpenID_Connect_Generic_Option_Settings( array() );
+		$settings->woocommerce_login = 'end';
+		$output = $this->render_settings_page( $this->create_settings_page( false, $settings ) );
+
+		$form = substr( $output, strpos( $output, 'action="options.php"' ) );
+		$form = substr( $form, 0, strpos( $form, '</form>' ) );
+		$this->assertStringNotContainsString( 'id="woocommerce_login"', $form );
+		$this->assertStringNotContainsString( 'WooCommerce Login', $form );
+		$this->assertStringContainsString( '<input type="hidden" name="' . esc_attr( $settings->get_option_name() ) . '[woocommerce_login]" value="end">', $form );
+	}
 }
