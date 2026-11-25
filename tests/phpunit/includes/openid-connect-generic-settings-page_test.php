@@ -630,4 +630,16 @@ class OpenID_Connect_Generic_Settings_Page_Test extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'WooCommerce Login', $form );
 		$this->assertStringContainsString( '<input type="hidden" name="' . esc_attr( $settings->get_option_name() ) . '[woocommerce_login]" value="end">', $form );
 	}
+
+	/**
+	 * Test that an array posted for a text field isn't saved as an array.
+	 *
+	 * @group SettingsPageTests
+	 */
+	public function test_sanitize_settings_ignores_arrays_for_text_fields() {
+		$saved = $this->create_settings_page()->sanitize_settings( array( 'client_id' => array( 'x' ) ) );
+
+		$this->assertSame( '', $saved['client_id'] );
+	}
+
 }

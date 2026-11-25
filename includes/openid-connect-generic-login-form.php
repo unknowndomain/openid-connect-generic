@@ -113,7 +113,7 @@ class OpenID_Connect_Generic_Login_Form {
 		}
 
 		// Block password logins and password resets for the users set by the Password Login setting.
-		if ( ! empty( $settings->password_login ) ) {
+		if ( in_array( $settings->password_login, array( 'linked', 'roles' ), true ) ) {
 			add_filter( 'authenticate', array( $login_form, 'start_password_login_check' ), PHP_INT_MIN );
 			add_action( 'application_password_did_authenticate', array( $login_form, 'record_application_password_login' ) );
 			add_filter( 'authenticate', array( $login_form, 'block_password_login' ), 30 );
@@ -264,6 +264,10 @@ class OpenID_Connect_Generic_Login_Form {
 	private function is_password_login_blocked( WP_User $user ) {
 		if ( 'linked' === $this->settings->password_login ) {
 			return (bool) get_user_option( 'openid-connect-generic-subject-identity', $user->ID );
+		}
+
+		if ( 'roles' !== $this->settings->password_login ) {
+			return false;
 		}
 
 		$allowed_roles = (array) $this->settings->password_login_roles;
