@@ -386,6 +386,7 @@ class OpenID_Connect_Generic_Settings_Page {
 					'end'   => __( 'Bottom of the login form', 'daggerhart-openid-connect-generic' ),
 					'auto'  => __( 'Auto Login - SSO', 'daggerhart-openid-connect-generic' ),
 				),
+				'disabled'    => defined( 'OIDC_WOOCOMMERCE_LOGIN' ),
 				'section'     => 'login_settings',
 				// Without WooCommerce the setting does nothing, so it isn't shown.
 				'hidden'      => ! $this->is_woocommerce_active(),
